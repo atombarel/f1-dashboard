@@ -55,6 +55,20 @@ function Dashboard() {
     enabled: !!selectedSession
   })
 
+  // Get race control messages for race sessions
+  const { data: raceControl } = useQuery({
+    queryKey: ['raceControl', selectedSession],
+    queryFn: () => f1Api.getRaceControl(selectedSession),
+    enabled: !!selectedSession
+  })
+
+  // Get pit stops for race sessions
+  const { data: pitStops } = useQuery({
+    queryKey: ['pitStops', selectedSession],
+    queryFn: () => f1Api.getPitStops(selectedSession),
+    enabled: !!selectedSession
+  })
+
   // Process lap data for chart
   const chartData = React.useMemo(() => {
     if (!allLaps || allLaps.length === 0) return []
@@ -411,6 +425,627 @@ function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* Long Run Analysis for Practice Sessions */}
+        {selectedSession && stints && allLaps && driversInSession.length > 0 && (
+          (() => {
+            // Check if it's a practice session by looking at the selected option text
+            const sessionSelects = document.querySelectorAll('select')
+            const sessionSelect = sessionSelects[2] // Third select is the session dropdown
+            const selectedOption = sessionSelect?.options[sessionSelect.selectedIndex]
+            const isPractice = selectedOption?.text?.toLowerCase().includes('practice') || false
+            
+            console.log('Long Run Analysis Debug:', {
+              isPractice,
+              stintsLength: stints?.length,
+              selectedDrivers: selectedDrivers.length,
+              selectedOptionText: selectedOption?.text
+            })
+            
+            if (!isPractice) return null
+            
+            // Calculate average lap times per stint for each driver
+            const stintAnalysis = {}
+            
+            // Use selected drivers or all drivers if none selected
+            const driversToAnalyze = selectedDrivers.length > 0 
+              ? selectedDrivers 
+              : driversInSession.map(d => d.driver_number)
+            
+            driversToAnalyze.forEach(driverNum => {
+              const driverStints = stints.filter(s => s.driver_number === driverNum)
+              const driverLaps = allLaps.filter(l => l.driver_number === driverNum)
+              
+              if (driverStints.length === 0 || driverLaps.length === 0) return
+              
+              stintAnalysis[driverNum] = driverStints.map(stint => {
+                // Get laps for this stint, skipping the out lap
+                const stintLaps = driverLaps.filter(lap => 
+                  lap.lap_number >= stint.lap_start && 
+                  lap.lap_number <= stint.lap_end &&
+                  lap.lap_number > stint.lap_start // Skip only the actual out lap
+                )
+                
+                // Only consider stints with 4 or more laps as long runs
+                if (stintLaps.length < 4) return null
+                
+                const avgTime = stintLaps.reduce((sum, lap) => sum + lap.lap_time_seconds, 0) / stintLaps.length
+                
+                return {
+                  stint_number: stint.stint_number,
+                  compound: stint.compound,
+                  lap_start: stint.lap_start,
+                  lap_end: stint.lap_end,
+                  lap_count: stintLaps.length,
+                  avg_time: avgTime,
+                  min_time: Math.min(...stintLaps.map(l => l.lap_time_seconds)),
+                  max_time: Math.max(...stintLaps.map(l => l.lap_time_seconds))
+                }
+              }).filter(s => s !== null)
+            })
+            
+            // Filter out drivers with no long runs (4+ laps)
+            Object.keys(stintAnalysis).forEach(key => {
+              if (stintAnalysis[key].length === 0) {
+                delete stintAnalysis[key]
+              }
+            })
+            
+            console.log('Stint Analysis Results (4+ laps only):', stintAnalysis)
+            
+            if (Object.keys(stintAnalysis).length === 0) return null
+            
+            return (
+              <div style={{
+                backgroundColor: darkMode ? '#1a1a1a' : 'white',
+                padding: '20px',
+                borderRadius: '8px',
+                marginTop: '20px',
+                boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'all 0.3s'
+              }}>
+                <h2 style={{ fontSize: '24px', marginBottom: '20px', color: darkMode ? '#fff' : '#333' }}>
+                  Long Run Analysis - Practice Session (4+ Laps)
+                </h2>
+                
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+                  gap: '20px'
+                }}>
+                  {Object.entries(stintAnalysis).map(([driverNumber, stints]) => {
+                    const driver = drivers?.find(d => d.driver_number === parseInt(driverNumber))
+                    
+                    return (
+                      <div 
+                        key={driverNumber}
+                        style={{
+                          border: `3px solid ${getTeamColor(driver?.team_name)}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          backgroundColor: darkMode ? '#2a2a2a' : '#f9f9f9'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: '15px',
+                          paddingBottom: '10px',
+                          borderBottom: darkMode ? '2px solid #444' : '2px solid #e0e0e0'
+                        }}>
+                          <div style={{
+                            width: '50px',
+                            height: '50px',
+                            backgroundColor: getTeamColor(driver?.team_name),
+                            color: 'white',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '16px',
+                            marginRight: '15px'
+                          }}>
+                            {driver?.name_acronym || `#${driverNumber}`}
+                          </div>
+                          <div>
+                            <h3 style={{ margin: '0 0 3px 0', color: darkMode ? '#fff' : '#333', fontSize: '18px' }}>
+                              {driver?.full_name || `Driver #${driverNumber}`}
+                            </h3>
+                            <p style={{ margin: 0, color: darkMode ? '#aaa' : '#666', fontSize: '13px' }}>
+                              {stints.length} long run{stints.length > 1 ? 's' : ''} (4+ laps)
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {stints.map((stint, idx) => (
+                          <div 
+                            key={idx}
+                            style={{
+                              marginBottom: '12px',
+                              padding: '10px',
+                              backgroundColor: darkMode ? '#1a1a1a' : '#fff',
+                              borderRadius: '6px',
+                              border: darkMode ? '1px solid #444' : '1px solid #e0e0e0'
+                            }}
+                          >
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: '8px'
+                            }}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}>
+                                <span style={{
+                                  padding: '4px 10px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 'bold',
+                                  color: '#fff',
+                                  backgroundColor: getTireColor(stint.compound) || '#888',
+                                  border: darkMode ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(0,0,0,0.2)',
+                                  textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                                }}>
+                                  {stint.compound}
+                                </span>
+                                <span style={{ 
+                                  fontSize: '12px', 
+                                  color: darkMode ? '#aaa' : '#666'
+                                }}>
+                                  Laps {stint.lap_start + 2}-{stint.lap_end} ({stint.lap_count} laps)
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr 1fr',
+                              gap: '8px',
+                              fontSize: '13px'
+                            }}>
+                              <div>
+                                <div style={{ color: darkMode ? '#888' : '#999', fontSize: '11px' }}>Average</div>
+                                <div style={{ fontWeight: 'bold', color: '#3b82f6' }}>
+                                  {formatLapTime(stint.avg_time)}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: darkMode ? '#888' : '#999', fontSize: '11px' }}>Best</div>
+                                <div style={{ fontWeight: 'bold', color: '#22c55e' }}>
+                                  {formatLapTime(stint.min_time)}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: darkMode ? '#888' : '#999', fontSize: '11px' }}>Worst</div>
+                                <div style={{ fontWeight: 'bold', color: '#ef4444' }}>
+                                  {formatLapTime(stint.max_time)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {/* Overall stint comparison */}
+                        {stints.length > 1 && (
+                          <div style={{
+                            marginTop: '10px',
+                            paddingTop: '10px',
+                            borderTop: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
+                            fontSize: '12px',
+                            color: darkMode ? '#aaa' : '#666'
+                          }}>
+                            <strong>Best avg stint: </strong>
+                            <span style={{ color: '#22c55e', fontWeight: 'bold' }}>
+                              {formatLapTime(Math.min(...stints.map(s => s.avg_time)))}
+                            </span>
+                            {' on '}
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '3px',
+                              fontSize: '10px',
+                              fontWeight: 'bold',
+                              color: '#fff',
+                              backgroundColor: getTireColor(stints.find(s => s.avg_time === Math.min(...stints.map(st => st.avg_time)))?.compound) || '#888',
+                              textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                            }}>
+                              {stints.find(s => s.avg_time === Math.min(...stints.map(st => st.avg_time)))?.compound}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                
+                {/* Summary comparison if multiple drivers selected */}
+                {Object.keys(stintAnalysis).length > 1 && (
+                  <div style={{
+                    marginTop: '20px',
+                    padding: '15px',
+                    backgroundColor: darkMode ? '#2a2a2a' : '#f8f8f8',
+                    borderRadius: '6px'
+                  }}>
+                    <h3 style={{ 
+                      fontSize: '16px', 
+                      marginBottom: '10px', 
+                      color: darkMode ? '#fff' : '#333' 
+                    }}>
+                      Driver Comparison
+                    </h3>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '10px'
+                    }}>
+                      {Object.entries(stintAnalysis).map(([driverNumber, stints]) => {
+                        const driver = drivers?.find(d => d.driver_number === parseInt(driverNumber))
+                        const bestStint = stints.reduce((best, stint) => 
+                          !best || stint.avg_time < best.avg_time ? stint : best, null)
+                        
+                        return (
+                          <div key={driverNumber} style={{
+                            padding: '10px',
+                            backgroundColor: darkMode ? '#1a1a1a' : '#fff',
+                            borderRadius: '6px',
+                            border: `2px solid ${getTeamColor(driver?.team_name)}`
+                          }}>
+                            <div style={{ 
+                              fontWeight: 'bold', 
+                              marginBottom: '5px',
+                              color: darkMode ? '#fff' : '#333'
+                            }}>
+                              {driver?.name_acronym}
+                            </div>
+                            <div style={{ fontSize: '12px', color: darkMode ? '#aaa' : '#666' }}>
+                              Best long run avg:
+                            </div>
+                            <div style={{ 
+                              fontSize: '18px', 
+                              fontWeight: 'bold', 
+                              color: '#3b82f6',
+                              marginBottom: '5px'
+                            }}>
+                              {formatLapTime(bestStint.avg_time)}
+                            </div>
+                            <div style={{
+                              padding: '3px 8px',
+                              borderRadius: '3px',
+                              fontSize: '10px',
+                              fontWeight: 'bold',
+                              color: '#fff',
+                              backgroundColor: getTireColor(bestStint.compound) || '#888',
+                              display: 'inline-block',
+                              textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                            }}>
+                              {bestStint.compound} ({bestStint.lap_count} laps)
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()
+        )}
+
+
+        {/* Race Events Timeline - Only for Race Sessions */}
+        {selectedSession && (() => {
+          // Use DOM query approach like Long Run Analysis
+          const sessionSelects = document.querySelectorAll('select')
+          const sessionSelect = sessionSelects[2] // Third select is session dropdown
+          const selectedOption = sessionSelect?.options[sessionSelect.selectedIndex]
+          const sessionName = selectedOption?.text?.toLowerCase() || ''
+          const isRace = sessionName.includes('race') && !sessionName.includes('sprint')
+          
+          if (!isRace) return null
+          
+          if (!raceControl || raceControl.length === 0) {
+            return (
+              <div style={{
+                backgroundColor: darkMode ? '#1a1a1a' : 'white',
+                padding: '20px',
+                borderRadius: '8px',
+                marginTop: '20px',
+                boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'all 0.3s'
+              }}>
+                <h2 style={{ fontSize: '24px', marginBottom: '20px', color: darkMode ? '#fff' : '#333' }}>
+                  🏁 Race Events Timeline
+                </h2>
+                <div style={{ 
+                  padding: '20px', 
+                  textAlign: 'center', 
+                  color: darkMode ? '#999' : '#666',
+                  fontStyle: 'italic'
+                }}>
+                  No race control data available for this session
+                </div>
+              </div>
+            )
+          }
+          
+          // Group events by lap number
+          const eventsByLap = {}
+          raceControl.forEach(event => {
+            const lap = event.lap_number || 0
+            if (!eventsByLap[lap]) eventsByLap[lap] = []
+            eventsByLap[lap].push(event)
+          })
+          
+          // Get event icon and color
+          const getEventStyle = (category) => {
+            const styles = {
+              'Flag': { icon: '🏁', color: '#fbbf24' },
+              'SafetyCar': { icon: '🚗', color: '#f97316' },
+              'DRS': { icon: '⚡', color: '#3b82f6' },
+              'Penalty': { icon: '⚠️', color: '#ef4444' },
+              'CarEvent': { icon: '🔧', color: '#8b5cf6' },
+              'Other': { icon: '📢', color: '#6b7280' }
+            }
+            
+            if (category?.includes('Flag')) return styles.Flag
+            if (category?.includes('Safety') || category?.includes('SC')) return styles.SafetyCar
+            if (category?.includes('DRS')) return styles.DRS
+            if (category?.includes('Penalty') || category?.includes('Time')) return styles.Penalty
+            if (category?.includes('Car')) return styles.CarEvent
+            return styles.Other
+          }
+          
+          return (
+            <div style={{
+              backgroundColor: darkMode ? '#1a1a1a' : 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              marginTop: '20px',
+              boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s'
+            }}>
+              <h2 style={{ fontSize: '24px', marginBottom: '20px', color: darkMode ? '#fff' : '#333' }}>
+                🏁 Race Events Timeline
+              </h2>
+              
+              <div style={{
+                maxHeight: '400px',
+                overflowY: 'auto',
+                border: darkMode ? '1px solid #333' : '1px solid #e5e5e5',
+                borderRadius: '8px',
+                padding: '15px'
+              }}>
+                {Object.entries(eventsByLap).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([lap, events]) => (
+                  <div key={lap} style={{ marginBottom: '20px' }}>
+                    <div style={{
+                      fontWeight: 'bold',
+                      color: darkMode ? '#a0a0a0' : '#666',
+                      marginBottom: '10px',
+                      fontSize: '14px'
+                    }}>
+                      {lap === '0' ? 'Pre-Race' : `Lap ${lap}`}
+                    </div>
+                    {events.map((event, idx) => {
+                      const style = getEventStyle(event.category)
+                      return (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          marginBottom: '10px',
+                          padding: '10px',
+                          backgroundColor: darkMode ? '#2a2a2a' : '#f9f9f9',
+                          borderRadius: '6px',
+                          borderLeft: `4px solid ${style.color}`
+                        }}>
+                          <span style={{ marginRight: '10px', fontSize: '20px' }}>{style.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              fontWeight: 'bold', 
+                              color: darkMode ? '#fff' : '#333',
+                              marginBottom: '4px'
+                            }}>
+                              {event.category}
+                            </div>
+                            <div style={{ 
+                              color: darkMode ? '#b0b0b0' : '#666',
+                              fontSize: '14px'
+                            }}>
+                              {event.message}
+                            </div>
+                            {event.driver_number && (
+                              <div style={{
+                                display: 'inline-block',
+                                marginTop: '5px',
+                                padding: '2px 8px',
+                                backgroundColor: getTeamColor(drivers?.find(d => d.driver_number === event.driver_number)?.team_name),
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }}>
+                                {drivers?.find(d => d.driver_number === event.driver_number)?.name_acronym || `#${event.driver_number}`}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Pit Stop Analysis - Only for Race Sessions */}
+        {selectedSession && (() => {
+          // Use DOM query approach like Long Run Analysis
+          const sessionSelects = document.querySelectorAll('select')
+          const sessionSelect = sessionSelects[2] // Third select is session dropdown
+          const selectedOption = sessionSelect?.options[sessionSelect.selectedIndex]
+          const sessionName = selectedOption?.text?.toLowerCase() || ''
+          const isRace = sessionName.includes('race')
+          
+          if (!isRace) return null
+          
+          if (!pitStops || pitStops.length === 0) {
+            return (
+              <div style={{
+                backgroundColor: darkMode ? '#1a1a1a' : 'white',
+                padding: '20px',
+                borderRadius: '8px',
+                marginTop: '20px',
+                boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'all 0.3s'
+              }}>
+                <h2 style={{ fontSize: '24px', marginBottom: '20px', color: darkMode ? '#fff' : '#333' }}>
+                  🔧 Pit Stop Analysis
+                </h2>
+                <div style={{ 
+                  padding: '20px', 
+                  textAlign: 'center', 
+                  color: darkMode ? '#999' : '#666',
+                  fontStyle: 'italic'
+                }}>
+                  No pit stop data available for this session
+                </div>
+              </div>
+            )
+          }
+          
+          // Calculate pit stop statistics
+          const pitStopsByDriver = {}
+          pitStops.forEach(stop => {
+            if (!pitStopsByDriver[stop.driver_number]) {
+              pitStopsByDriver[stop.driver_number] = []
+            }
+            pitStopsByDriver[stop.driver_number].push(stop)
+          })
+          
+          // Sort by fastest stop time
+          const fastestStop = pitStops.reduce((min, stop) => 
+            stop.pit_duration < min.pit_duration ? stop : min
+          )
+          
+          return (
+            <div style={{
+              backgroundColor: darkMode ? '#1a1a1a' : 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              marginTop: '20px',
+              boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s'
+            }}>
+              <h2 style={{ fontSize: '24px', marginBottom: '20px', color: darkMode ? '#fff' : '#333' }}>
+                🔧 Pit Stop Analysis
+              </h2>
+              
+              {/* Fastest Stop */}
+              <div style={{
+                padding: '15px',
+                backgroundColor: darkMode ? '#2a2a2a' : '#f0f9ff',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                border: '2px solid #3b82f6'
+              }}>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#3b82f6', marginBottom: '5px' }}>
+                  ⚡ Fastest Pit Stop
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{
+                    padding: '5px 10px',
+                    backgroundColor: getTeamColor(drivers?.find(d => d.driver_number === fastestStop.driver_number)?.team_name),
+                    color: 'white',
+                    borderRadius: '4px',
+                    fontWeight: 'bold'
+                  }}>
+                    {drivers?.find(d => d.driver_number === fastestStop.driver_number)?.name_acronym || `#${fastestStop.driver_number}`}
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: darkMode ? '#fff' : '#333' }}>
+                    {fastestStop.pit_duration.toFixed(3)}s
+                  </div>
+                  <div style={{ color: darkMode ? '#999' : '#666' }}>
+                    Lap {fastestStop.lap_number}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Pit Stops by Driver */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+                gap: '15px'
+              }}>
+                {Object.entries(pitStopsByDriver)
+                  .sort((a, b) => a[1].length - b[1].length)
+                  .map(([driverNumber, stops]) => {
+                    const driver = drivers?.find(d => d.driver_number === parseInt(driverNumber))
+                    const avgTime = stops.reduce((sum, s) => sum + s.pit_duration, 0) / stops.length
+                    
+                    return (
+                      <div key={driverNumber} style={{
+                        padding: '15px',
+                        backgroundColor: darkMode ? '#2a2a2a' : '#f9f9f9',
+                        borderRadius: '8px',
+                        border: `2px solid ${getTeamColor(driver?.team_name)}`
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: '10px'
+                        }}>
+                          <div style={{
+                            padding: '4px 8px',
+                            backgroundColor: getTeamColor(driver?.team_name),
+                            color: 'white',
+                            borderRadius: '4px',
+                            fontWeight: 'bold',
+                            marginRight: '10px'
+                          }}>
+                            {driver?.name_acronym || `#${driverNumber}`}
+                          </div>
+                          <div style={{ color: darkMode ? '#999' : '#666', fontSize: '14px' }}>
+                            {stops.length} stop{stops.length > 1 ? 's' : ''}
+                          </div>
+                        </div>
+                        
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ fontSize: '12px', color: darkMode ? '#999' : '#666', marginBottom: '4px' }}>
+                            Average Time
+                          </div>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: darkMode ? '#fff' : '#333' }}>
+                            {avgTime.toFixed(3)}s
+                          </div>
+                        </div>
+                        
+                        <div>
+                          {stops.map((stop, idx) => (
+                            <div key={idx} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              padding: '5px 0',
+                              borderTop: idx > 0 ? `1px solid ${darkMode ? '#444' : '#e5e5e5'}` : 'none',
+                              fontSize: '14px'
+                            }}>
+                              <span style={{ color: darkMode ? '#999' : '#666' }}>
+                                Lap {stop.lap_number}
+                              </span>
+                              <span style={{ fontWeight: 'bold', color: darkMode ? '#fff' : '#333' }}>
+                                {stop.pit_duration.toFixed(3)}s
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Driver Details Card */}
         {selectedDrivers.length > 0 && allLaps && (

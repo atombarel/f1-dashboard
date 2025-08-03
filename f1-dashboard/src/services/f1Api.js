@@ -67,6 +67,24 @@ export const f1Api = {
     
     const response = await api.get('/pit', { params })
     return response.data
+  },
+
+  // Get race control messages (flags, safety car, penalties, etc)
+  getRaceControl: async (sessionKey) => {
+    const response = await api.get('/race_control', { params: { session_key: sessionKey } })
+    return response.data.sort((a, b) => new Date(a.date) - new Date(b.date))
+  },
+
+  // Get position data for race
+  getPositions: async (sessionKey) => {
+    const response = await api.get('/position', { params: { session_key: sessionKey } })
+    return response.data
+  },
+
+  // Get intervals data (gaps between drivers)
+  getIntervals: async (sessionKey) => {
+    const response = await api.get('/intervals', { params: { session_key: sessionKey } })
+    return response.data
   }
 }
 
