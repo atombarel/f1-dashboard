@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { API_CONFIG } from '../constants/config'
 
 const api = axios.create({
-  baseURL: 'https://api.openf1.org/v1',
+  baseURL: API_CONFIG.BASE_URL,
   timeout: 15000,
 })
 
@@ -85,6 +86,18 @@ export const f1Api = {
   getIntervals: async (sessionKey) => {
     const response = await api.get('/intervals', { params: { session_key: sessionKey } })
     return response.data
+  },
+
+  // Get session results (final standings)
+  getSessionResults: async (sessionKey) => {
+    const response = await api.get('/session_result', { params: { session_key: sessionKey } })
+    return response.data.sort((a, b) => a.position - b.position)
+  },
+
+  // Get starting grid
+  getStartingGrid: async (sessionKey) => {
+    const response = await api.get('/starting_grid', { params: { session_key: sessionKey } })
+    return response.data.sort((a, b) => a.position - b.position)
   }
 }
 
@@ -119,46 +132,7 @@ const filterOutlierLapTimes = (laps) => {
     lap.lap_time_seconds <= upperThreshold
   )
   
-  // Debug logging
-  console.log(`Filtering lap times: ${laps.length} -> ${finalFiltered.length}`)
-  console.log(`Extreme filter removed: ${laps.length - filteredLaps.length} laps`)
-  console.log(`Thresholds: ${lowerThreshold.toFixed(3)}s - ${upperThreshold.toFixed(3)}s`)
-  console.log(`Median: ${median.toFixed(3)}s, Q1: ${q1.toFixed(3)}s, Q3: ${q3.toFixed(3)}s`)
   
   return finalFiltered
 }
 
-// Utility functions
-export const formatLapTime = (seconds) => {
-  if (!seconds || seconds <= 0) return '--:--.---'
-  const minutes = Math.floor(seconds / 60)
-  const secs = (seconds % 60).toFixed(3)
-  return `${minutes}:${secs.padStart(6, '0')}`
-}
-
-export const getTeamColor = (teamName) => {
-  const teamColors = {
-    'Red Bull Racing': '#0600ef',
-    'Mercedes': '#00d2be',
-    'Ferrari': '#dc143c',
-    'McLaren': '#ff8700',
-    'Alpine': '#0090ff',
-    'Aston Martin': '#006f62',
-    'Williams': '#005aff',
-    'Haas F1 Team': '#787878',
-    'AlphaTauri': '#2b4562',
-    'Alfa Romeo': '#900000'
-  }
-  return teamColors[teamName] || '#888888'
-}
-
-export const getTireColor = (compound) => {
-  const tireColors = {
-    'SOFT': '#dc2626',     // Red with better contrast
-    'MEDIUM': '#f59e0b',    // Amber/Orange for better visibility than yellow
-    'HARD': '#6b7280',      // Gray instead of white for better contrast
-    'INTERMEDIATE': '#10b981',  // Green
-    'WET': '#3b82f6'        // Blue
-  }
-  return tireColors[compound] || '#888888'
-}
