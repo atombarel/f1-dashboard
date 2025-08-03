@@ -37,10 +37,14 @@ export const openf1Api = {
       if (year) params.year = year;
       
       const response = await api.get('/meetings', { params });
-      return response.data;
+      // Filter out testing sessions and only return actual races
+      return response.data.filter(meeting => 
+        !meeting.meeting_name.includes('Testing') && 
+        !meeting.meeting_name.includes('Pre-Season')
+      );
     } catch (error) {
       console.error('Error fetching meetings:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -52,10 +56,13 @@ export const openf1Api = {
       if (year) params.year = year;
       
       const response = await api.get('/sessions', { params });
-      return response.data;
+      // Sort sessions by date and filter out testing
+      return response.data
+        .filter(session => !session.session_name.includes('Test'))
+        .sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
     } catch (error) {
       console.error('Error fetching sessions:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -66,24 +73,37 @@ export const openf1Api = {
       if (sessionKey) params.session_key = sessionKey;
       
       const response = await api.get('/drivers', { params });
-      return response.data;
+      // Sort drivers by driver number
+      return response.data.sort((a, b) => a.driver_number - b.driver_number);
     } catch (error) {
       console.error('Error fetching drivers:', error);
-      throw error;
+      return [];
     }
   },
 
-  // Get car data
+  // Get car data (limited to avoid too much data)
   getCarData: async (sessionKey, driverNumber = null) => {
     try {
-      const params = { session_key: sessionKey };
+      if (!sessionKey) return [];
+      
+      const params = { 
+        session_key: sessionKey
+      };
       if (driverNumber) params.driver_number = driverNumber;
       
       const response = await api.get('/car_data', { params });
-      return response.data;
+      
+      // Filter and limit data for performance
+      const filteredData = response.data
+        .filter(item => item.speed > 0) // Only valid speed data
+        .filter((item, index) => index % 10 === 0) // Take every 10th data point for performance
+        .slice(0, 200); // Limit to 200 points max
+        
+      return filteredData;
     } catch (error) {
-      console.error('Error fetching car data:', error);
-      throw error;
+      console.error('Error fetching car data:', error.response?.data || error.message);
+      // Return empty array instead of throwing to prevent app crash
+      return [];
     }
   },
 
