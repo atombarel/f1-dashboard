@@ -77,5 +77,4 @@ jobs:
       uses: cloudflare/wrangler-action@v3
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        wranglerVersion: "4.28.0"
-        command: pages deploy dist
+        command: pages deploy dist --project-name=f1-session-laps
