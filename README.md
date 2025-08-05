@@ -3,6 +3,8 @@
 A comprehensive Formula 1 data visualization dashboard built with React, featuring real-time race analysis, lap time comparisons, tire strategies, and detailed session results powered by the OpenF1 API.
 
 ![F1 Dashboard](https://img.shields.io/badge/F1-Dashboard-red?style=for-the-badge&logo=formula1)
+![CI/CD](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/ci.yml/badge.svg)
+![Deployment](https://img.shields.io/badge/Deployed%20on-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare)
 ![React](https://img.shields.io/badge/React-19.1.0-61DAFB?style=for-the-badge&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-6.3.5-646CFF?style=for-the-badge&logo=vite)
 ![TanStack Query](https://img.shields.io/badge/TanStack_Query-5.84.1-FF4154?style=for-the-badge)
