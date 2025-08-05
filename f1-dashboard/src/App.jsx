@@ -18,7 +18,6 @@ import { SessionStats } from './features/laps/components/SessionStats'
 import { LongRunAnalysis } from './features/analysis/components/LongRunAnalysis'
 import { RaceEventsTimeline } from './features/race/components/RaceEventsTimeline'
 import { RaceStrategyAnalysis } from './features/race/components/RaceStrategyAnalysis'
-import { RaceStrategyLeaderboard } from './features/race/components/RaceStrategyLeaderboard'
 import { RaceStrategyDashboard } from './features/race/components/RaceStrategyDashboard'
 import { PitStopAnalysis } from './features/race/components/PitStopAnalysis'
 import { SessionResults } from './features/results/components/SessionResults'
@@ -245,16 +244,6 @@ function Dashboard() {
           allLaps={allLaps}
           drivers={driversInSession}
           positions={positions}
-          darkMode={isDarkMode}
-        />
-
-        {/* Race Strategy Leaderboard with Visual Timeline */}
-        <RaceStrategyLeaderboard
-          sessionResults={sessionResults}
-          pitStops={pitStops}
-          stints={stints}
-          allLaps={allLaps}
-          drivers={driversInSession}
           darkMode={isDarkMode}
         />
 

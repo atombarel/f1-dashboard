@@ -29,7 +29,8 @@
       "WebFetch(domain:openf1.org)",
       "WebFetch(domain:api.openf1.org)",
       "Bash(curl:*)",
-      "mcp__playwright__browser_close"
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_hover"
     ],
     "deny": []
   }

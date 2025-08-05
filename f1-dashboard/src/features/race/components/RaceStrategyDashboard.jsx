@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react'
 import { getTireColor, getTeamColor } from '../../../shared/utils/formatters'
 import { THEME_COLORS } from '../../../constants/colors'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export function RaceStrategyDashboard({ sessions, selectedSession, sessionResults, pitStops, stints, allLaps, drivers, positions, darkMode }) {
   const theme = darkMode ? THEME_COLORS.DARK : THEME_COLORS.LIGHT
@@ -53,46 +52,6 @@ export function RaceStrategyDashboard({ sessions, selectedSession, sessionResult
       })
   }, [sessionResults, stints, pitStops, allLaps, drivers])
 
-  // Process position data for bump chart
-  const bumpChartData = useMemo(() => {
-    if (!positions || positions.length === 0) return []
-
-    // Group positions by lap
-    const positionsByLap = {}
-    
-    positions.forEach(pos => {
-      const lap = pos.lap_number || 0
-      if (!positionsByLap[lap]) {
-        positionsByLap[lap] = {}
-      }
-      positionsByLap[lap][pos.driver_number] = pos.position
-    })
-
-    // Convert to array format for Recharts
-    const chartData = Object.entries(positionsByLap)
-      .map(([lap, positions]) => ({
-        lap: parseInt(lap),
-        ...positions
-      }))
-      .sort((a, b) => a.lap - b.lap)
-
-    // Sample data if there are too many laps (keep every nth lap)
-    if (chartData.length > 100) {
-      const sampleRate = Math.ceil(chartData.length / 100)
-      return chartData.filter((_, index) => index % sampleRate === 0 || index === chartData.length - 1)
-    }
-
-    return chartData
-  }, [positions])
-
-  // Get unique driver numbers from bump chart data
-  const driverNumbers = useMemo(() => {
-    if (bumpChartData.length === 0) return []
-    const firstLap = bumpChartData[0]
-    return Object.keys(firstLap)
-      .filter(key => key !== 'lap')
-      .map(num => parseInt(num))
-  }, [bumpChartData])
 
   // Scale factor for timeline width (leave small padding on the right)
   const lapWidth = totalLaps > 0 ? 97 / totalLaps : 0
@@ -274,51 +233,22 @@ export function RaceStrategyDashboard({ sessions, selectedSession, sessionResult
     marginLeft: '8px'
   }
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload) return null
-
-    return (
-      <div style={{
-        backgroundColor: darkMode ? '#1a1a1a' : '#ffffff',
-        border: `1px solid ${darkMode ? '#3a3a3a' : '#e0e0e0'}`,
-        borderRadius: '6px',
-        padding: '8px 12px',
-        fontSize: '12px',
-        boxShadow: darkMode ? '0 4px 6px rgba(0, 0, 0, 0.3)' : '0 4px 6px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ fontWeight: '600', marginBottom: '4px', color: theme.text }}>
-          Lap {label}
-        </div>
-        {payload
-          .sort((a, b) => a.value - b.value)
-          .map((entry) => {
-            const driverNum = entry.dataKey
-            const driver = drivers?.find(d => d.driver_number === parseInt(driverNum))
-            return (
-              <div key={driverNum} style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                marginBottom: '2px'
-              }}>
-                <span style={{ 
-                  color: getTeamColor(driver?.team_name || 'Unknown'),
-                  fontWeight: '600'
-                }}>
-                  P{entry.value}
-                </span>
-                <span style={{ color: theme.textSecondary }}>
-                  {driverLookup[driverNum] || `#${driverNum}`}
-                </span>
-              </div>
-            )
-          })}
-      </div>
-    )
-  }
 
   // Show empty state if no data available
   const hasStrategyData = driversWithStrategy && driversWithStrategy.length > 0
+
+  // Check if current session is a race session (not sprint)
+  const isRace = useMemo(() => {
+    const currentSession = sessions?.find(s => 
+      s.session_key === selectedSession || 
+      s.session_key === String(selectedSession) ||
+      String(s.session_key) === String(selectedSession)
+    )
+    const sessionName = currentSession?.session_name?.toLowerCase() || ''
+    const isRaceSession = sessionName.includes('race') && !sessionName.includes('sprint')
+    
+    return isRaceSession
+  }, [sessions, selectedSession])
 
   // Generate lap markers (every 10 laps)
   const lapMarkers = []
@@ -326,16 +256,21 @@ export function RaceStrategyDashboard({ sessions, selectedSession, sessionResult
     lapMarkers.push(i)
   }
 
+  // Don't render anything if not a race session
+  if (!isRace) {
+    return null
+  }
+
   return (
-    <div style={containerStyle}>
-      {/* Left Panel - Strategy Timeline */}
+    <div>
+      {/* Race Strategy Timeline - Full Width */}
       <div style={panelStyle}>
-        <div style={titleStyle}>
-          <span style={{ color: '#e10600' }}>🏁</span>
-          Race Strategy Timeline
-        </div>
-        
-        {hasStrategyData ? driversWithStrategy.map(driver => (
+          <div style={titleStyle}>
+            <span style={{ color: '#e10600' }}>🏁</span>
+            Race Strategy Timeline
+          </div>
+          
+          {hasStrategyData ? driversWithStrategy.map(driver => (
           <div key={driver.driver_number} style={driverRowStyle}>
             <div style={getPositionContainerStyle()}>
               <div style={getPositionStyle(driver.position)}>
@@ -494,71 +429,6 @@ export function RaceStrategyDashboard({ sessions, selectedSession, sessionResult
               <div style={legendColorStyle(getTireColor('WET'))} />
               <span>Wet</span>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Right Panel - Position Bump Chart */}
-      <div style={panelStyle}>
-        <div style={titleStyle}>
-          <span style={{ color: '#e10600' }}>📈</span>
-          Position Changes
-        </div>
-        
-        {bumpChartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={600}>
-            <LineChart 
-              data={bumpChartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid 
-                strokeDasharray="3 3" 
-                stroke={darkMode ? '#2a2a2a' : '#e0e0e0'}
-              />
-              <XAxis 
-                dataKey="lap" 
-                stroke={theme.textSecondary}
-                tick={{ fill: theme.textSecondary, fontSize: 11 }}
-                label={{ value: 'Lap', position: 'insideBottom', offset: -5, style: { fill: theme.textSecondary } }}
-              />
-              <YAxis 
-                reversed
-                domain={[1, 20]}
-                ticks={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
-                stroke={theme.textSecondary}
-                tick={{ fill: theme.textSecondary, fontSize: 11 }}
-                label={{ value: 'Position', angle: -90, position: 'insideLeft', style: { fill: theme.textSecondary } }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              {driverNumbers.map(driverNum => {
-                const driver = drivers?.find(d => d.driver_number === driverNum)
-                const teamColor = getTeamColor(driver?.team_name || 'Unknown')
-                
-                return (
-                  <Line
-                    key={driverNum}
-                    type="monotone"
-                    dataKey={driverNum.toString()}
-                    stroke={teamColor}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                    name={driverLookup[driverNum] || `#${driverNum}`}
-                  />
-                )
-              })}
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '400px',
-            color: theme.textSecondary,
-            fontSize: '14px'
-          }}>
-            No position data available
           </div>
         )}
       </div>

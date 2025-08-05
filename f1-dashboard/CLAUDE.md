@@ -13,6 +13,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Testing
 - `npx playwright test` - Run Playwright tests (if test files exist)
 
+## Development Workflow
+
+### Local Development Server
+**IMPORTANT**: Always keep the development server running when making changes to the codebase:
+```bash
+npm run dev
+```
+The server runs on http://localhost:5173 and provides:
+- Hot module replacement for instant code updates
+- Real-time error feedback
+- Automatic browser refresh on file changes
+
+### Testing with Playwright
+When testing UI changes or functionality:
+1. Ensure the dev server is running on http://localhost:5173
+2. Use Playwright MCP tools to interact with the live application
+3. Navigate through different sessions (Practice, Qualifying, Race) to test session-specific features
+4. Test both light and dark modes using the theme toggle
+5. Verify responsive behavior and component interactions
+
+**Common test scenarios:**
+- Select 2024 → Bahrain Grand Prix → Race to test race-specific features
+- Select 2024 → Bahrain Grand Prix → Practice 1 to test practice-specific features  
+- Test Race Strategy Dashboard only appears for race sessions
+- Verify Long Run Analysis only appears for practice sessions
+- Test driver selection and chart interactions
+
 ## Architecture Overview
 
 ### Core Application Structure
@@ -50,7 +77,7 @@ The F1 dashboard is a production-ready React application that visualizes Formula
    │   ├── analysis/       # Long run analysis for practice sessions
    │   │   └── components/ # LongRunAnalysis
    │   ├── race/           # Race-specific features
-   │   │   ├── components/ # RaceEventsTimeline, PitStopAnalysis, RaceStrategyAnalysis
+   │   │   ├── components/ # RaceEventsTimeline, PitStopAnalysis, RaceStrategyAnalysis, RaceStrategyDashboard
    │   │   └── hooks/      # useRaceControl, usePitStops, usePositions
    │   ├── results/        # Session results and standings
    │   │   ├── components/ # SessionResults
@@ -105,13 +132,14 @@ Automatically appears in practice sessions, showing only stints with 4+ laps:
 - Best stint comparison across drivers
 - Driver comparison grid showing best long run averages
 
-#### Race Strategy Analysis (Race Sessions Only)
-Comprehensive tire strategy breakdown:
-- Most effective strategies ranked by success rate
-- Strategy comparison with average lap times and position changes
-- Tire compound usage visualization
-- Driver strategy groupings
-- Success rate calculations based on position improvements
+#### Race Strategy Dashboard (Race Sessions Only)
+Visual tire strategy timeline showing race finishing order and pit strategies:
+- Driver finishing positions with team colors
+- Visual tire strategy timeline showing compound changes throughout the race
+- Pit stop counts and lap markers
+- DNF indicators for drivers who didn't finish
+- Checkered flag indicators for race finishers
+- Tire compound legend with color coding
 
 #### Race Events Timeline (Race Sessions Only)
 Displays chronological race control messages:
@@ -185,6 +213,7 @@ Comprehensive pit stop statistics:
 - Chart tooltips require custom styling for dark mode support
 - Results classification uses proper F1 sorting logic with type checking for gap_to_leader strings
 - Circuit information requires meetings data to be passed as props to SessionResults component
+- Race-specific components (RaceStrategyDashboard, RaceEventsTimeline, PitStopAnalysis) include session filtering to only appear for race sessions (not sprint races)
 
 ### Known Limitations
 - Long Run Analysis only shows in practice sessions
@@ -196,3 +225,4 @@ Comprehensive pit stop statistics:
 - Sprint races are excluded from race session features to avoid duplicate data
 - Circuit information depends on meetings data availability
 - Results classification relies on duration and gap_to_leader fields from OpenF1 API
+- **Position tracking**: OpenF1 API does not provide lap-by-lap position data for all drivers, making detailed position change charts impossible to implement accurately
