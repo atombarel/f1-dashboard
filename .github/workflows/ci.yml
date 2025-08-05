@@ -74,7 +74,7 @@ jobs:
         path: dist/
         
     - name: Deploy to Cloudflare Pages
-      uses: cloudflare/wrangler-action@v4
+      uses: cloudflare/wrangler-action@v3
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        command: pages deploy dist
+        wranglerVersion: "4.28.0"
