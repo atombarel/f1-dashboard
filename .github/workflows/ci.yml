@@ -64,11 +64,17 @@ jobs:
     if: github.ref == 'refs/heads/main'
     
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: build-files
         path: dist/
         
-    - name: Deploy to production
-      run: echo "Deploy step - configure with your deployment target"
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        command: pages deploy dist
