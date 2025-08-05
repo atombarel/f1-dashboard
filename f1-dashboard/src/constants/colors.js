@@ -31,6 +31,7 @@ export const TIRE_COLORS = {
 
 export const TEAM_COLORS = {
   'red_bull': '#0600EF',
+  'red_bull_racing': '#0600EF',
   'mercedes': '#00D2BE',
   'ferrari': '#DC0000',
   'mclaren': '#FF8700',
@@ -38,9 +39,12 @@ export const TEAM_COLORS = {
   'aston_martin': '#006F62',
   'alphatauri': '#2B4562',
   'rb': '#2B4562',
+  'racing_bulls': '#2B4562',
   'alfa': '#900000',
   'williams': '#005AFF',
   'haas': '#FFFFFF',
+  'haas_f1_team': '#FFFFFF',
   'kick': '#00E701',
+  'kick_sauber': '#00E701',
   'sauber': '#00E701',
 }

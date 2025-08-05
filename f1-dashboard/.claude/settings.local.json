@@ -27,7 +27,9 @@
       "Bash(mv:*)",
       "Bash(npm run lint:*)",
       "WebFetch(domain:openf1.org)",
-      "WebFetch(domain:api.openf1.org)"
+      "WebFetch(domain:api.openf1.org)",
+      "Bash(curl:*)",
+      "mcp__playwright__browser_close"
     ],
     "deny": []
   }
