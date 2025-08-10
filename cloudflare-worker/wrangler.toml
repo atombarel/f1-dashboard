@@ -1,0 +1,33 @@
+name = "f1-api-cache"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Default environment variables
+[vars]
+OPENF1_API_BASE = "https://api.openf1.org/v1"
+CACHE_DEBUG = "false"
+
+# Default D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "f1-api-cache-db"
+database_id = "6987f960-070c-4d07-b6ed-1cbdf937e7f0"
+
+# Development environment
+[env.dev]
+name = "f1-api-cache-dev"
+vars = { OPENF1_API_BASE = "https://api.openf1.org/v1", CACHE_DEBUG = "true" }
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "f1-api-cache-db"
+database_id = "6987f960-070c-4d07-b6ed-1cbdf937e7f0"
+
+# Production environment
+[env.production]
+name = "f1-api-cache-production"
+vars = { OPENF1_API_BASE = "https://api.openf1.org/v1", CACHE_DEBUG = "false" }
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "f1-api-cache-db"
+database_id = "6987f960-070c-4d07-b6ed-1cbdf937e7f0"

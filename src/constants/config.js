@@ -1,7 +1,32 @@
+// Check if we have a cache API URL configured, otherwise use direct API
+const CACHE_API_URL = import.meta.env.VITE_CACHE_API_URL;
+const USE_CACHE_API = Boolean(CACHE_API_URL);
+
 export const API_CONFIG = {
-  BASE_URL: 'https://api.openf1.org/v1',
-  CACHE_TIME: 10 * 60 * 1000, // 10 minutes
-  STALE_TIME: 5 * 60 * 1000,  // 5 minutes
+  // Use cached API if configured, otherwise direct OpenF1 API
+  BASE_URL: CACHE_API_URL || 'https://api.openf1.org/v1',
+  // Store direct API URL for reference
+  DIRECT_API_URL: 'https://api.openf1.org/v1',
+  // Cache API URL (if configured)
+  CACHE_API_URL: CACHE_API_URL,
+  // Whether we're using the cache API
+  USE_CACHE_API,
+  // Cache times - shorter when using cache API, longer for direct API
+  CACHE_TIME: USE_CACHE_API ? 2 * 60 * 1000 : 10 * 60 * 1000, // 2min with cache, 10min direct
+  STALE_TIME: USE_CACHE_API ? 1 * 60 * 1000 : 5 * 60 * 1000,   // 1min with cache, 5min direct
+  // Enable cache headers inspection in development
+  SHOW_CACHE_HEADERS: import.meta.env.DEV === true
+}
+
+// Log configuration on startup (development only)
+if (import.meta.env.DEV) {
+  console.log('🏁 F1 Dashboard API Configuration:', {
+    baseUrl: API_CONFIG.BASE_URL,
+    usingCacheApi: USE_CACHE_API,
+    cacheApiUrl: CACHE_API_URL || 'Not configured',
+    cacheTime: API_CONFIG.CACHE_TIME / 1000 + 's',
+    staleTime: API_CONFIG.STALE_TIME / 1000 + 's'
+  });
 }
 
 export const CHART_CONFIG = {

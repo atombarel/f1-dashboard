@@ -1,0 +1,17 @@
+{
+  "name": "f1-api-cache-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for caching F1 API requests with D1 database",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev --env dev",
+    "deploy": "wrangler deploy --env production",
+    "deploy:dev": "wrangler deploy --env dev",
+    "db:create": "wrangler d1 create f1-api-cache-db",
+    "db:migrate": "wrangler d1 migrations apply f1-api-cache-db --env production",
+    "db:migrate:dev": "wrangler d1 migrations apply f1-api-cache-db --env dev --local"
+  },
+  "devDependencies": {
+    "wrangler": "^4.28.1"
+  }
+}

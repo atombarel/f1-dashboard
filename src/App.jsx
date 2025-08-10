@@ -23,6 +23,7 @@ import { RaceStrategyDashboard } from './features/race/components/RaceStrategyDa
 import { PitStopAnalysis } from './features/race/components/PitStopAnalysis'
 import { SessionResults } from './features/results/components/SessionResults'
 import { ThemeToggle } from './shared/components/DarkModeToggle'
+import { CacheDebugger } from './shared/components/CacheDebugger'
 
 // Utils
 import { getTeamColor } from './shared/utils/formatters'
@@ -324,6 +325,9 @@ function Dashboard() {
           />
         </div>
       </div>
+      
+      {/* Cache debugger for development */}
+      <CacheDebugger darkMode={isDarkMode} />
     </div>
   )
 }

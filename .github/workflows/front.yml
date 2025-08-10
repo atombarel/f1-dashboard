@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI/CD Front
 
 on:
   push:
@@ -49,6 +49,9 @@ jobs:
         path: node_modules
         key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
         
+    - name: Set API URL for production build
+      run: echo "VITE_CACHE_API_URL=https://f1-api-cache-production.megadownload.workers.dev" > .env.production
+      
     - name: Build project
       run: npm run build
       
