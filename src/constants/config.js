@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  BASE_URL: '/api',
+  BASE_URL: 'https://api.openf1.org/v1',
   CACHE_TIME: 10 * 60 * 1000, // 10 minutes
   STALE_TIME: 5 * 60 * 1000,  // 5 minutes
 }
