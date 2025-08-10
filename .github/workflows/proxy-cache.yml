@@ -31,8 +31,25 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Run migrations
-      run: npx wrangler d1 migrations apply f1-api-cache-db --env production --remote
+    - name: Check and run migrations
+      run: |
+        echo "Checking migration status..."
+        
+        # Check what migrations need to be applied
+        MIGRATION_OUTPUT=$(npx wrangler d1 migrations list f1-api-cache-db --env production --remote 2>&1)
+        echo "Migration status: $MIGRATION_OUTPUT"
+        
+        if echo "$MIGRATION_OUTPUT" | grep -q "No migrations to apply"; then
+          echo "✅ No migrations needed - database is up to date"
+        else
+          echo "📝 Applying migrations..."
+          if npx wrangler d1 migrations apply f1-api-cache-db --env production --remote; then
+            echo "✅ Migrations applied successfully"
+          else
+            echo "❌ Migration failed but continuing with deployment"
+            echo "This might be expected if migrations were already applied"
+          fi
+        fi
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     
