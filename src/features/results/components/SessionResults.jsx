@@ -51,18 +51,17 @@ export function SessionResults({ sessions, selectedSession, sessionResults, star
     return config
   }, [sessions, selectedSession])
 
-  // Combine session results with driver info
+  // Combine session results with driver info and compute qualifying gaps per segment
   const processedResults = useMemo(() => {
     if (!sessionResults || !drivers) return []
-    
+
     const resultsWithDrivers = sessionResults.map(result => {
       const driver = drivers.find(d => d.driver_number === result.driver_number)
-      
-      // Determine if this is a DNF or non-finisher
+
       const hasValidDuration = result.duration && result.duration !== '-' && !(typeof result.duration === 'string' && isNaN(parseFloat(result.duration)))
       const isLapped = result.gap_to_leader && typeof result.gap_to_leader === 'string' && result.gap_to_leader.includes('LAP')
       const isDNF = !hasValidDuration && !isLapped
-      
+
       return {
         ...result,
         driver,
@@ -71,36 +70,106 @@ export function SessionResults({ sessions, selectedSession, sessionResults, star
         isFinisher: !isDNF && !isLapped
       }
     })
-    
-    // Custom sorting: Finishers first (by position), then lapped drivers (by position), then DNFs (by position)
+
+    // If qualifying, compute per-segment bests and gaps (Q1/Q2/Q3)
+    const isQuali = sessionInfo?.showQualifyingBreakdown
+    if (isQuali) {
+      // duration can be number (seconds) or array [q1,q2,q3] seconds according to existing UI
+      const segmentBests = [0,1,2].map(segIdx => {
+        const times = resultsWithDrivers
+          .map(r => Array.isArray(r.duration) ? Number(r.duration[segIdx]) : NaN)
+          .filter(v => typeof v === 'number' && !isNaN(v) && v > 0)
+        if (times.length === 0) return null
+        return Math.min(...times)
+      })
+
+      return resultsWithDrivers.map(r => {
+        if (!Array.isArray(r.duration)) return r
+        const gaps = r.duration.map((val, idx) => {
+          const best = segmentBests[idx]
+          if (!best || !val || isNaN(val)) return null
+          const delta = Number(val) - best
+          return delta >= 0 ? delta : 0
+        })
+        return { ...r, quali_segment_gaps: gaps, quali_segment_bests: segmentBests }
+      })
+      .sort((a, b) => a.position - b.position)
+    }
+
+    // Non-qualifying: original ordering rules
     return resultsWithDrivers.sort((a, b) => {
-      // Both are finishers - sort by position
-      if (a.isFinisher && b.isFinisher) {
-        return a.position - b.position
-      }
-      
-      // Both are lapped - sort by position
-      if (a.isLapped && b.isLapped) {
-        return a.position - b.position
-      }
-      
-      // Both are DNF - sort by position
-      if (a.isDNF && b.isDNF) {
-        return a.position - b.position
-      }
-      
-      // Mixed types - finishers first, then lapped, then DNF
+      if (a.isFinisher && b.isFinisher) return a.position - b.position
+      if (a.isLapped && b.isLapped) return a.position - b.position
+      if (a.isDNF && b.isDNF) return a.position - b.position
       if (a.isFinisher && !b.isFinisher) return -1
       if (!a.isFinisher && b.isFinisher) return 1
-      
-      // Lapped drivers come before DNF drivers
       if (a.isLapped && b.isDNF) return -1
       if (a.isDNF && b.isLapped) return 1
-      
-      // Fallback to position
       return a.position - b.position
     })
-  }, [sessionResults, drivers])
+  }, [sessionResults, drivers, sessionInfo])
+
+  // Q3 Top 2 comparison: extract sector times and speeds from matching laps
+  const q3Top2Comparison = useMemo(() => {
+    if (!sessionInfo?.showQualifyingBreakdown) return null
+    if (!processedResults || processedResults.length === 0 || !allLaps) return null
+
+    // pick top two by position that have Q3 times
+    const topWithQ3 = processedResults
+      .filter(r => Array.isArray(r.duration) && typeof r.duration[2] === 'number' && !isNaN(r.duration[2]) && r.duration[2] > 0)
+      .sort((a, b) => a.position - b.position)
+      .slice(0, 2)
+
+    if (topWithQ3.length < 2) return null
+
+    const tolerance = 0.02 // seconds tolerance when matching Q3 time to a lap
+    const enrich = (result) => {
+      const q3 = Number(result.duration[2])
+      const driverLaps = allLaps.filter(l => l.driver_number === result.driver_number && typeof l.lap_duration === 'number')
+      // find lap with lap_duration close to q3
+      let bestLap = null
+      let bestDiff = Infinity
+      for (const lap of driverLaps) {
+        const diff = Math.abs(Number(lap.lap_duration) - q3)
+        if (diff < bestDiff) {
+          bestDiff = diff
+          bestLap = lap
+        }
+      }
+      if (!bestLap || bestDiff > tolerance) {
+        // fallback: take min lap (should equal Q3 best) if within sanity bounds
+        const sorted = [...driverLaps].sort((a, b) => a.lap_duration - b.lap_duration)
+        bestLap = sorted[0] || null
+      }
+      return {
+        driver_number: result.driver_number,
+        name_acronym: result.driver?.name_acronym || `#${result.driver_number}`,
+        team_name: result.driver?.team_name || 'Unknown',
+        q3_time: q3,
+        sector1: typeof bestLap?.duration_sector_1 === 'number' ? bestLap.duration_sector_1 : null,
+        sector2: typeof bestLap?.duration_sector_2 === 'number' ? bestLap.duration_sector_2 : null,
+        sector3: typeof bestLap?.duration_sector_3 === 'number' ? bestLap.duration_sector_3 : null,
+        i1_speed: bestLap?.i1_speed ?? null,
+        i2_speed: bestLap?.i2_speed ?? null,
+        st_speed: bestLap?.st_speed ?? null,
+      }
+    }
+
+    const a = enrich(topWithQ3[0])
+    const b = enrich(topWithQ3[1])
+
+    const toDelta = (va, vb) => (typeof va === 'number' && typeof vb === 'number') ? (va - vb) : null
+    return {
+      a,
+      b,
+      deltas: {
+        total: toDelta(a.q3_time, b.q3_time),
+        s1: toDelta(a.sector1, b.sector1),
+        s2: toDelta(a.sector2, b.sector2),
+        s3: toDelta(a.sector3, b.sector3),
+      }
+    }
+  }, [sessionInfo, processedResults, allLaps])
 
   if (!selectedSession || !sessionInfo) {
     return null
@@ -285,6 +354,7 @@ export function SessionResults({ sessions, selectedSession, sessionResults, star
   }
 
   return (
+    <>
     <div style={{
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
@@ -417,29 +487,21 @@ export function SessionResults({ sessions, selectedSession, sessionResults, star
                     <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {result.duration && Array.isArray(result.duration) ? (
                         result.duration.map((timeValue, index) => {
-                          if (!timeValue || isNaN(timeValue)) return null
-                          const segmentName = ['Q1', 'Q2', 'Q3'][index]
-                          if (!segmentName) return null
+                          const segName = ['Q1', 'Q2', 'Q3'][index]
+                          if (!segName || !timeValue || isNaN(timeValue)) return null
+                          const gap = Array.isArray(result.quali_segment_gaps) ? result.quali_segment_gaps[index] : null
+                          const isBest = Array.isArray(result.quali_segment_bests) && result.quali_segment_bests[index] === timeValue
                           return (
-                            <div key={index} style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: '3px'
-                            }}>
-                              <div style={{
-                                fontSize: '12px',
-                                color: theme.TEXT_SECONDARY,
-                                fontWeight: '500'
-                              }}>
-                                {segmentName}
-                              </div>
-                              <div style={{
-                                fontSize: '14px',
-                                fontWeight: '600'
-                              }}>
+                            <div key={index} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <div style={{ fontSize: '12px', color: theme.TEXT_SECONDARY, fontWeight: '500' }}>{segName}</div>
+                              <div style={{ fontSize: '14px', fontWeight: '700', color: isBest ? '#10b981' : theme.TEXT }}>
                                 {formatLapTime(timeValue)}
                               </div>
+                              {gap !== null && gap !== undefined && gap > 0 && (
+                                <div style={{ fontSize: '12px', color: theme.TEXT_SECONDARY }}>
+                                  +{gap.toFixed(3)}s
+                                </div>
+                              )}
                             </div>
                           )
                         }).filter(Boolean)
@@ -540,5 +602,116 @@ export function SessionResults({ sessions, selectedSession, sessionResults, star
       {/* Circuit Information Card - Half Width */}
       <CircuitInfoCard />
     </div>
+
+    {/* Q3 Top 2 Comparison Panel */}
+    {sessionInfo?.showQualifyingBreakdown && q3Top2Comparison && (
+      <div style={{
+        backgroundColor: theme.BACKGROUND_SECONDARY,
+        padding: '20px',
+        borderRadius: '8px',
+        boxShadow: darkMode ? '0 2px 4px rgba(255,255,255,0.1)' : '0 2px 4px rgba(0,0,0,0.1)',
+        transition: 'all 0.3s',
+        marginBottom: '25px'
+      }}>
+        <h3 style={{ fontSize: '20px', margin: '0 0 16px 0', color: theme.TEXT, fontWeight: '700' }}>
+          Q3 Top 2 Comparison
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr', gap: '16px', alignItems: 'center' }}>
+          {/* Driver A */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '6px', height: '22px', borderRadius: '3px', backgroundColor: getTeamColor(q3Top2Comparison.a.team_name) }} />
+              <div style={{ color: theme.TEXT, fontWeight: 700 }}>{q3Top2Comparison.a.name_acronym}</div>
+            </div>
+            <div style={{ fontFamily: 'monospace', color: theme.TEXT }}>
+              {formatLapTime(q3Top2Comparison.a.q3_time)}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {['S1', 'S2', 'S3'].map((label, idx) => {
+                const val = [q3Top2Comparison.a.sector1, q3Top2Comparison.a.sector2, q3Top2Comparison.a.sector3][idx]
+                const delta = [q3Top2Comparison.deltas.s1, q3Top2Comparison.deltas.s2, q3Top2Comparison.deltas.s3][idx]
+                const isPurple = typeof delta === 'number' ? delta < 0 : false
+                return (
+                  <div key={label} style={{
+                    backgroundColor: theme.BACKGROUND_TERTIARY,
+                    border: `1px solid ${theme.BORDER}`,
+                    borderRadius: '6px',
+                    padding: '6px 8px',
+                    minWidth: '84px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '11px', color: theme.TEXT_SECONDARY }}>{label}</div>
+                    <div style={{ fontWeight: 700, color: isPurple ? '#a855f7' : theme.TEXT }}>{val ? formatLapTime(val) : '-'}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', color: theme.TEXT_SECONDARY, fontSize: '12px' }}>
+              <div>I1: {q3Top2Comparison.a.i1_speed ?? '-'} km/h</div>
+              <div>I2: {q3Top2Comparison.a.i2_speed ?? '-' } km/h</div>
+              <div>ST: {q3Top2Comparison.a.st_speed ?? '-' } km/h</div>
+            </div>
+          </div>
+
+          {/* Delta column */}
+          <div style={{ textAlign: 'center', color: theme.TEXT }}>
+            <div style={{ fontSize: '12px', color: theme.TEXT_SECONDARY }}>Total Δ</div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '18px' }}>
+              {q3Top2Comparison.deltas.total !== null && q3Top2Comparison.deltas.total !== undefined ?
+                `${q3Top2Comparison.deltas.total >= 0 ? '+' : ''}${q3Top2Comparison.deltas.total.toFixed(3)}s` : '-'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+              {['S1','S2','S3'].map((label, idx) => {
+                const d = [q3Top2Comparison.deltas.s1, q3Top2Comparison.deltas.s2, q3Top2Comparison.deltas.s3][idx]
+                const color = typeof d === 'number' ? (d < 0 ? '#22c55e' : d > 0 ? '#ef4444' : theme.TEXT_SECONDARY) : theme.TEXT_SECONDARY
+                return (
+                  <div key={label} style={{ color, fontFamily: 'monospace', fontWeight: 700 }}>
+                    {label} {typeof d === 'number' ? `${d >= 0 ? '+' : ''}${d.toFixed(3)}s` : '-'}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Driver B */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ color: theme.TEXT, fontWeight: 700 }}>{q3Top2Comparison.b.name_acronym}</div>
+              <div style={{ width: '6px', height: '22px', borderRadius: '3px', backgroundColor: getTeamColor(q3Top2Comparison.b.team_name) }} />
+            </div>
+            <div style={{ fontFamily: 'monospace', color: theme.TEXT }}>
+              {formatLapTime(q3Top2Comparison.b.q3_time)}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {['S1', 'S2', 'S3'].map((label, idx) => {
+                const val = [q3Top2Comparison.b.sector1, q3Top2Comparison.b.sector2, q3Top2Comparison.b.sector3][idx]
+                const delta = [q3Top2Comparison.deltas.s1, q3Top2Comparison.deltas.s2, q3Top2Comparison.deltas.s3][idx]
+                const isPurple = typeof delta === 'number' ? delta > 0 : false // if B is faster, delta for A is positive
+                return (
+                  <div key={label} style={{
+                    backgroundColor: theme.BACKGROUND_TERTIARY,
+                    border: `1px solid ${theme.BORDER}`,
+                    borderRadius: '6px',
+                    padding: '6px 8px',
+                    minWidth: '84px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '11px', color: theme.TEXT_SECONDARY }}>{label}</div>
+                    <div style={{ fontWeight: 700, color: isPurple ? '#a855f7' : theme.TEXT }}>{val ? formatLapTime(val) : '-'}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', color: theme.TEXT_SECONDARY, fontSize: '12px' }}>
+              <div>I1: {q3Top2Comparison.b.i1_speed ?? '-'} km/h</div>
+              <div>I2: {q3Top2Comparison.b.i2_speed ?? '-' } km/h</div>
+              <div>ST: {q3Top2Comparison.b.st_speed ?? '-' } km/h</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    )}
+  </>
   )
 }

@@ -13,6 +13,13 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     allowedHosts: ['host.docker.internal'],
+    proxy: {
+      '/api': {
+        target: 'https://api.openf1.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/v1'),
+      },
+    },
   },
   build: {
     rollupOptions: {

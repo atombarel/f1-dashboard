@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Hooks
@@ -14,6 +14,7 @@ import { MeetingSelector } from './features/dashboard/components/MeetingSelector
 import { SessionSelector } from './features/dashboard/components/SessionSelector'
 import { DriverSelector } from './features/drivers/components/DriverSelector'
 import { LapTimeChart } from './features/laps/components/LapTimeChart'
+import { QualifyingChart } from './features/laps/components/QualifyingChart'
 import { SessionStats } from './features/laps/components/SessionStats'
 import { LongRunAnalysis } from './features/analysis/components/LongRunAnalysis'
 import { RaceEventsTimeline } from './features/race/components/RaceEventsTimeline'
@@ -41,9 +42,11 @@ const queryClient = new QueryClient({
 })
 
 function Dashboard() {
-  const [selectedYear, setSelectedYear] = useState('2025')
-  const [selectedMeeting, setSelectedMeeting] = useState('')
-  const [selectedSession, setSelectedSession] = useState('')
+  // Initialize from URL params for shareable state
+  const initialParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  const [selectedYear, setSelectedYear] = useState(initialParams.get('year') || '2025')
+  const [selectedMeeting, setSelectedMeeting] = useState(initialParams.get('meeting') || '')
+  const [selectedSession, setSelectedSession] = useState(initialParams.get('session') || '')
   const [selectedDrivers, setSelectedDrivers] = useState([])
   const [eventFilters, setEventFilters] = useState(() => 
     Object.fromEntries(EVENT_TYPES.map(e => [e.value, true]))
@@ -64,6 +67,20 @@ function Dashboard() {
   const { data: sessionResults } = useSessionResults(selectedSession)
   const { data: startingGrid } = useStartingGrid(selectedSession)
 
+  // Sync selection to URL (shareable links)
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedYear) params.set('year', String(selectedYear))
+    if (selectedMeeting) params.set('meeting', String(selectedMeeting))
+    if (selectedSession) params.set('session', String(selectedSession))
+
+    const newSearch = params.toString()
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`
+    if (newUrl !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', newUrl)
+    }
+  }, [selectedYear, selectedMeeting, selectedSession])
+
 
   // Process chart data
   const chartData = useMemo(() => {
@@ -83,6 +100,17 @@ function Dashboard() {
     return Object.values(lapGroups).sort((a, b) => a.lap_number - b.lap_number)
   }, [allLaps, drivers])
 
+  // Determine if session is qualifying to swap chart
+  const isQualifying = useMemo(() => {
+    const currentSession = sessions?.find(s => 
+      s.session_key === selectedSession || 
+      s.session_key === String(selectedSession) ||
+      String(s.session_key) === String(selectedSession)
+    )
+    const sessionName = currentSession?.session_name?.toLowerCase() || ''
+    return sessionName.includes('qualifying')
+  }, [sessions, selectedSession])
+
   // Process drivers with team colors
   const driversInSession = useMemo(() => {
     if (!allLaps) return []
@@ -92,6 +120,7 @@ function Dashboard() {
       return {
         driver_number: num,
         name_acronym: driver?.name_acronym || `#${num}`,
+        full_name: driver?.full_name || driver?.broadcast_name || driver?.name_acronym || `#${num}`,
         team_name: driver?.team_name || 'Unknown',
         color: getTeamColor(driver?.team_name)
       }
@@ -209,13 +238,21 @@ function Dashboard() {
           transition: 'all 0.3s',
           marginBottom: '30px'
         }}>
-          <LapTimeChart
-            chartData={chartData}
-            drivers={driversToShow}
-            isLoading={lapsLoading}
-            selectedSession={selectedSession}
-            darkMode={isDarkMode}
-          />
+          {isQualifying ? (
+            <QualifyingChart
+              sessionResults={sessionResults}
+              drivers={driversInSession}
+              darkMode={isDarkMode}
+            />
+          ) : (
+            <LapTimeChart
+              chartData={chartData}
+              drivers={driversToShow}
+              isLoading={lapsLoading}
+              selectedSession={selectedSession}
+              darkMode={isDarkMode}
+            />
+          )}
           <SessionStats
             chartData={chartData}
             drivers={driversInSession}

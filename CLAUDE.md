@@ -8,10 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` - Start development server on http://localhost:5173
 - `npm run build` - Build production bundle
 - `npm run preview` - Preview production build locally
-- `npm run lint` - Run ESLint on all JS/JSX files
+- `npm run lint` - Run ESLint on all JS/JSX files (Note: Some violations exist that need fixing)
 
 ### Testing
-- `npx playwright test` - Run Playwright tests (if test files exist)
+- `npx playwright test` - Playwright is configured but no test files are implemented yet
 
 ## Development Workflow
 
@@ -43,11 +43,12 @@ When testing UI changes or functionality:
 ## Architecture Overview
 
 ### Core Application Structure
-The F1 dashboard is a production-ready React application that visualizes Formula 1 race data. The application uses a clean, feature-based architecture with:
-- React Query (TanStack Query) for data fetching and caching
-- Dark mode with inline styles using centralized theme constants
-- Recharts library for interactive lap time visualization
-- Modular component structure for maintainability and scalability
+The F1 dashboard is a React application that visualizes Formula 1 race data. The application uses:
+- **Feature-based architecture**: Clean separation of features into modules
+- **React Query (TanStack Query)**: All data fetching with 5-minute stale time and 10-minute cache
+- **100% Inline Styles**: No CSS modules or Tailwind usage, all styling via style prop
+- **Recharts library**: Interactive lap time visualization with performance optimizations
+- **Centralized theme system**: THEME_COLORS constants for dark/light mode support
 
 ### Data Flow
 1. **API Layer** (`src/services/f1Api.js`):
@@ -61,6 +62,7 @@ The F1 dashboard is a production-ready React application that visualizes Formula
    - Local component state for UI selections (year, meeting, session, drivers, dark mode)
    - React Query for server state with 5-minute stale time and 10-minute cache
    - Custom hooks for data fetching in feature modules
+   - URL state synchronization for shareable links using URLSearchParams
 
 3. **Component Architecture** (Feature-Based):
    ```
@@ -168,9 +170,11 @@ Comprehensive pit stop statistics:
 
 ### Technical Implementation Details
 
-#### Styling Approach
-- Pure inline styles with conditional dark mode support
-- No CSS modules or external stylesheets
+#### Styling Approach (100% Inline Styles)
+- **All components use inline styles exclusively** via the style prop
+- **No Tailwind classes used** despite configuration present
+- **Theme constants** from THEME_COLORS for consistency
+- **Conditional dark mode** logic in every component
 - Color scheme:
   - F1 Red: #e10600
   - Dark mode background: #0a0a0a, #1a1a1a, #2a2a2a
@@ -205,24 +209,61 @@ Comprehensive pit stop statistics:
 - `/starting_grid?session_key={key}` - Get starting grid positions for races
 
 ### Development Notes
-- Vite configured with React plugin and path alias `@` for `./src`
-- ESLint configured with React hooks and refresh plugins
+- Vite configured with React plugin and path alias `@` for `./src` (not used in imports)
+- ESLint configured but has violations that need fixing (hook order, unused variables)
 - Server allows connections from Docker containers (`host.docker.internal`)
-- Heavy use of React Query for data fetching - avoid direct axios calls
-- Session detection for Long Run Analysis uses DOM query of select element (workaround for timing issues)
-- Chart tooltips require custom styling for dark mode support
-- Results classification uses proper F1 sorting logic with type checking for gap_to_leader strings
-- Circuit information requires meetings data to be passed as props to SessionResults component
-- Race-specific components (RaceStrategyDashboard, RaceEventsTimeline, PitStopAnalysis) include session filtering to only appear for race sessions (not sprint races)
+- All data fetching uses React Query - no direct axios calls
+- Session detection uses conditional rendering based on session type
+- Chart performance optimized with `dot={false}` and `isAnimationActive={false}`
+- Results classification uses proper F1 sorting logic with type checking
+- Circuit information requires meetings data to be passed as props to SessionResults
+- Race-specific components include session filtering to only appear for race sessions (not sprint races)
+- **No test files implemented** despite Playwright configuration
+- **All styling must use inline styles** - maintain consistency with existing pattern
 
-### Known Limitations
-- Long Run Analysis only shows in practice sessions
-- Requires 4+ lap stints to be considered a "long run"
+### Known Limitations & Issues
+
+#### Feature Limitations
+- Long Run Analysis only shows in practice sessions (requires 4+ lap stints)
 - Some practice sessions have limited stint data
 - Chart performance may degrade with very long sessions (70+ laps)
 - Race Events Timeline and Pit Stop Analysis only appear for race sessions
-- Race control messages depend on data availability from OpenF1 API
 - Sprint races are excluded from race session features to avoid duplicate data
+- **Position tracking**: OpenF1 API does not provide complete lap-by-lap position data
+
+#### Code Quality Issues
+- **ESLint violations present**:
+  - Hook order violation in `QualifyingChart.jsx`
+  - Unused variables in race strategy components
+  - Unnecessary dependencies in `LongRunAnalysis.jsx`
+- **No test files implemented** despite Playwright configuration
+- **No error boundaries** for comprehensive error handling
+- **Verbose inline styling** makes components harder to maintain
+
+#### API Dependencies
+- Race control messages depend on data availability from OpenF1 API
 - Circuit information depends on meetings data availability
 - Results classification relies on duration and gap_to_leader fields from OpenF1 API
-- **Position tracking**: OpenF1 API does not provide lap-by-lap position data for all drivers, making detailed position change charts impossible to implement accurately
+
+## Important Development Guidelines
+
+### Code Style Rules
+- **ALWAYS use inline styles** - No CSS modules, no Tailwind classes
+- **Use theme constants** from THEME_COLORS for all colors
+- **Follow existing patterns** - Check similar components before implementing
+- **Use React Query** for all data fetching - no direct axios calls
+- **Fix ESLint violations** before committing code
+
+### Common Pitfalls to Avoid
+- Don't use Tailwind classes (despite configuration present)
+- Don't create CSS files or use CSS modules
+- Don't use direct axios calls - always use React Query hooks
+- Don't forget to handle dark mode in inline styles
+- Don't violate React hooks rules (order matters!)
+
+### Before Making Changes
+1. Run `npm run lint` and note existing violations
+2. Test manually across different session types
+3. Verify dark/light mode works correctly
+4. Ensure inline styles follow existing patterns
+5. Check that React Query is used for all API calls

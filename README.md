@@ -1,6 +1,6 @@
 # F1 Dashboard 🏎️
 
-A comprehensive Formula 1 data visualization dashboard built with React, featuring real-time race analysis, lap time comparisons, tire strategies, and detailed session results powered by the OpenF1 API.
+A comprehensive Formula 1 data visualization dashboard built with React, featuring race analysis, lap time comparisons, tire strategies, and detailed session results powered by the OpenF1 API.
 
 ![F1 Dashboard](https://img.shields.io/badge/F1-Dashboard-red?style=for-the-badge&logo=formula1)
 ![CI/CD](https://github.com/atombarel/f1-dashboard/actions/workflows/ci.yml/badge.svg)
@@ -30,10 +30,10 @@ A comprehensive Formula 1 data visualization dashboard built with React, featuri
 - **Circuit Information**: Meeting names, locations, and session details
 
 ### 🎨 Modern UI/UX
-- **Dark/Light Mode**: Seamless theme switching with system preference detection
-- **Responsive Design**: Mobile-first design that works on all devices
+- **Dark/Light Mode**: Theme switching with system preference detection
+- **Responsive Design**: Works on all devices
 - **Interactive Charts**: Powered by Recharts with custom tooltips and legends
-- **Feature-Based Architecture**: Clean, maintainable component structure
+- **Inline Styling**: Consistent theme system using inline styles with conditional dark mode
 
 ## 🛠️ Technology Stack
 
@@ -43,11 +43,11 @@ A comprehensive Formula 1 data visualization dashboard built with React, featuri
 - **TanStack Query 5.84.1**: Powerful data fetching and caching
 
 ### UI & Styling
-- **Tailwind CSS 4.1.8**: Utility-first CSS framework
-- **Radix UI**: Accessible component primitives
-- **Recharts 2.15.4**: React charting library
-- **Lucide React**: Beautiful icon library
-- **Framer Motion**: Smooth animations
+- **Inline Styles**: Custom inline styling system with theme support
+- **Radix UI**: Component primitives (configured but minimally used)
+- **Recharts 2.15.4**: React charting library for data visualization
+- **Lucide React**: Icon library
+- **Tailwind CSS**: Configured but not actively used in components
 
 ### Data & API
 - **Axios 1.9.0**: HTTP client for API requests
@@ -55,9 +55,9 @@ A comprehensive Formula 1 data visualization dashboard built with React, featuri
 - **React Query**: Server state management with caching
 
 ### Development Tools
-- **ESLint**: Code linting and formatting
-- **Playwright**: End-to-end testing
-- **PostCSS & Autoprefixer**: CSS processing
+- **ESLint**: Code linting (configured, some violations present)
+- **Playwright**: Testing framework (configured, no test files implemented)
+- **PostCSS & Autoprefixer**: CSS processing (configured)
 
 ## 🚦 Getting Started
 
@@ -150,21 +150,22 @@ src/
 ### Key Components
 
 #### Data Layer (`src/services/f1Api.js`)
-- Centralized API service with data filtering
-- Outlier lap time removal using IQR method
-- Comprehensive endpoint coverage for all F1 data
+- Centralized API service with comprehensive endpoint coverage
+- Statistical outlier removal using IQR method (Q1-1.5*IQR to Q3+1.5*IQR)
+- Error handling with try/catch blocks
+- 15-second timeout configuration
 
-#### Feature Modules
-- **Dashboard**: Session and driver selection
-- **Laps**: Lap time visualization and statistics
-- **Race**: Race-specific analysis components
-- **Results**: Session classification and circuit info
-- **Analysis**: Practice session long run analysis
+#### Feature Modules (All Functional)
+- **Dashboard**: Year, meeting, and session selectors
+- **Laps**: Lap time chart with Recharts, session statistics
+- **Race**: Strategy dashboard, events timeline, pit stop analysis
+- **Results**: Full session results with Q1/Q2/Q3 for qualifying
+- **Analysis**: Long run analysis for practice sessions (4+ lap stints)
 
 #### Shared Components
 - **DarkModeToggle**: Theme switching with system detection
-- **EventMultiSelect**: Multi-selection dropdown
-- **Formatters**: Utility functions for data formatting
+- **EventMultiSelect**: Multi-selection dropdown (minimally used)
+- **Formatters**: Utility functions for lap time, team colors, tire colors
 
 ## 📊 Data Sources & API
 
@@ -210,10 +211,11 @@ WET: '#3b82f6'       // Blue
 ```
 
 ### Component Styling
-- **Inline Styles**: Conditional dark mode support
-- **No CSS Modules**: Pure inline styling approach
-- **Responsive Design**: Mobile-first with breakpoint considerations
-- **Team Colors**: Dynamic color application based on driver teams
+- **100% Inline Styles**: All components use inline styles exclusively
+- **Theme System**: Centralized theme colors with dark/light mode support
+- **No Tailwind Usage**: Despite configuration, no Tailwind classes are used
+- **Team Colors**: Dynamic color application using getTeamColor() function
+- **Consistent Pattern**: All styles use style prop with conditional logic
 
 ## 🔧 Configuration
 
@@ -223,29 +225,28 @@ WET: '#3b82f6'       // Blue
 - **Server Config**: Allows Docker container connections (`host.docker.internal`)
 
 ### Development Notes
-- **React Query**: Heavy usage for data fetching - avoid direct axios calls
-- **Session Detection**: Uses DOM queries for timing-sensitive operations
-- **Chart Performance**: May degrade with 70+ lap sessions
-- **Error Handling**: Graceful fallbacks for missing data
+- **React Query**: All data fetching uses React Query hooks
+- **Session Detection**: Conditional rendering based on session type
+- **Chart Performance**: Performance optimizations with dot={false} and isAnimationActive={false}
+- **Known Issues**: Some ESLint violations (hook order, unused variables)
+- **URL State**: Implemented for shareable links via URLSearchParams
 
 ## 🧪 Testing
 
-### Playwright Testing
+### Testing Configuration
+Playwright is configured in the project but no test files are currently implemented.
+
 ```bash
-npx playwright test    # Run end-to-end tests
+npx playwright test    # Will run tests once implemented
 ```
 
-### Testing Scenarios
+### Recommended Test Scenarios
+When implementing tests, consider:
 - Session navigation (Practice → Qualifying → Race)
 - Driver selection and data visualization
 - Dark/light mode switching
-- Responsive behavior testing
+- Responsive behavior
 - Race-specific feature visibility
-
-### Test Data Recommendations
-- **2024 Bahrain Grand Prix**: Well-populated data for all session types
-- **Practice Sessions**: Test Long Run Analysis features
-- **Race Sessions**: Test Race Strategy Dashboard and Events Timeline
 
 ## 🚀 Performance Optimizations
 
@@ -259,7 +260,7 @@ npx playwright test    # Run end-to-end tests
 - **Efficient Re-renders**: Strategic state management
 - **Chart Optimization**: Limited data points for smooth rendering
 
-## 🔍 Known Limitations
+## 🔍 Known Limitations & Issues
 
 ### API Constraints
 - **Position Data**: OpenF1 doesn't provide complete lap-by-lap position data
@@ -267,9 +268,15 @@ npx playwright test    # Run end-to-end tests
 - **Data Availability**: Some sessions may have limited stint or race control data
 
 ### Technical Limitations
-- **Long Run Analysis**: Requires 4+ lap stints, limited in some practice sessions
+- **Long Run Analysis**: Requires 4+ lap stints, may be limited in short practice sessions
 - **Chart Performance**: May slow with very long sessions (70+ laps)
-- **Session Detection**: Timing-sensitive DOM queries for feature visibility
+- **Inline Styles**: Verbose styling approach makes components harder to maintain
+
+### Code Quality Issues
+- **ESLint Violations**: Hook order issues in QualifyingChart.jsx
+- **Unused Variables**: Present in some race strategy components
+- **No Tests**: Testing framework configured but no tests implemented
+- **No Error Boundaries**: Missing comprehensive error handling
 
 ## 🤝 Contributing
 
@@ -282,11 +289,12 @@ npx playwright test    # Run end-to-end tests
 7. Open a Pull Request
 
 ### Development Guidelines
-- Follow feature-based architecture
-- Use React Query for all API calls
-- Maintain inline styling consistency
-- Add appropriate error handling
-- Test across different session types
+- Follow existing feature-based architecture
+- Use React Query for all API calls (no direct axios)
+- Maintain inline styling pattern (all styles via style prop)
+- Use theme constants from THEME_COLORS
+- Fix ESLint violations before committing
+- Test manually across different session types (no automated tests yet)
 
 ## 📝 License
 
