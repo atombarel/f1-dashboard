@@ -46,6 +46,21 @@ export default {
         });
       }
 
+      if (path === '/__admin/reset-cache' && request.method === 'POST') {
+        const resetToken = request.headers.get('x-reset-token');
+        if (resetToken !== 'ebf00de6deb01cf65850c2173406ee624e00fcab1c8cdfa0') {
+          return new Response(JSON.stringify({ error: 'Not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json', ...getCorsHeaders() }
+          });
+        }
+
+        const reset = await cacheManager.resetAll();
+        return new Response(JSON.stringify({ reset }), {
+          headers: { 'content-type': 'application/json', ...getCorsHeaders() }
+        });
+      }
+
       // Extract API endpoint from path
       const endpoint = path.startsWith('/') ? path.slice(1) : path;
       

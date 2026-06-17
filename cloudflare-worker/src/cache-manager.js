@@ -228,7 +228,7 @@ export class CacheManager {
    * Log request for analytics
    */
   async logRequest(endpoint, params, cacheHit, responseTimeMs, statusCode, errorMessage = null) {
-    if (!this.env.CACHE_DEBUG) return;
+    if (this.env.CACHE_DEBUG !== true && this.env.CACHE_DEBUG !== 'true') return;
 
     try {
       const requestId = crypto.randomUUID();
@@ -306,6 +306,26 @@ export class CacheManager {
     } catch (error) {
       console.error('Cleanup error:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Reset all cache-related rows.
+   */
+  async resetAll() {
+    try {
+      const requestLogs = await this.db.prepare('DELETE FROM request_logs').run();
+      const analytics = await this.db.prepare('DELETE FROM cache_analytics').run();
+      const cache = await this.db.prepare('DELETE FROM api_cache').run();
+
+      return {
+        request_logs: requestLogs.changes || 0,
+        cache_analytics: analytics.changes || 0,
+        api_cache: cache.changes || 0
+      };
+    } catch (error) {
+      console.error('Reset error:', error);
+      throw error;
     }
   }
 
