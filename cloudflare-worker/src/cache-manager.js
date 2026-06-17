@@ -310,26 +310,6 @@ export class CacheManager {
   }
 
   /**
-   * Reset all cache-related rows.
-   */
-  async resetAll() {
-    try {
-      const requestLogs = await this.db.prepare('DELETE FROM request_logs').run();
-      const analytics = await this.db.prepare('DELETE FROM cache_analytics').run();
-      const cache = await this.db.prepare('DELETE FROM api_cache').run();
-
-      return {
-        request_logs: requestLogs.changes || 0,
-        cache_analytics: analytics.changes || 0,
-        api_cache: cache.changes || 0
-      };
-    } catch (error) {
-      console.error('Reset error:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Get cache statistics
    */
   async getStats() {
