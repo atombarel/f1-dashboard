@@ -46,21 +46,6 @@ export default {
         });
       }
 
-      if (path === '/__admin/reset-cache' && request.method === 'POST') {
-        const resetToken = request.headers.get('x-reset-token');
-        if (resetToken !== '345c528e498664a162e89ce992e32d1e399cb2c24ec0c565') {
-          return new Response(JSON.stringify({ error: 'Not found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json', ...getCorsHeaders() }
-          });
-        }
-
-        const reset = await cacheManager.resetAll();
-        return new Response(JSON.stringify({ reset }), {
-          headers: { 'content-type': 'application/json', ...getCorsHeaders() }
-        });
-      }
-
       // Extract API endpoint from path
       const endpoint = path.startsWith('/') ? path.slice(1) : path;
       
