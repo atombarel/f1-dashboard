@@ -8,6 +8,8 @@
  * - Completed sessions: NEVER change (permanent cache) 
  * - Ongoing sessions: Change frequently (short cache)
  */
+export const CACHE_VERSION = '2026-06-17-season-reset';
+
 export const CACHE_CONFIG = {
   // Year-based data - permanent for past seasons, daily refresh for current
   meetings: {
@@ -260,7 +262,7 @@ export function generateCacheKey(endpoint, params = {}) {
     .map(key => `${key}=${params[key]}`)
     .join('&');
   
-  return `${endpoint}${sortedParams ? '?' + sortedParams : ''}`;
+  return `${CACHE_VERSION}:${endpoint}${sortedParams ? '?' + sortedParams : ''}`;
 }
 
 /**

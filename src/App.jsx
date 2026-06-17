@@ -45,7 +45,7 @@ const queryClient = new QueryClient({
 function Dashboard() {
   // Initialize from URL params for shareable state
   const initialParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-  const [selectedYear, setSelectedYear] = useState(initialParams.get('year') || '2025')
+  const [selectedYear, setSelectedYear] = useState(initialParams.get('year') || String(new Date().getFullYear()))
   const [selectedMeeting, setSelectedMeeting] = useState(initialParams.get('meeting') || '')
   const [selectedSession, setSelectedSession] = useState(initialParams.get('session') || '')
   const [selectedDrivers, setSelectedDrivers] = useState([])

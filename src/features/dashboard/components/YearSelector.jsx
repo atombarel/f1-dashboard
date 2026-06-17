@@ -3,6 +3,8 @@ import { THEME_COLORS } from '../../../constants/colors'
 
 export function YearSelector({ selectedYear, onYearChange, darkMode }) {
   const theme = darkMode ? THEME_COLORS.DARK : THEME_COLORS.LIGHT
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: currentYear - 2023 + 1 }, (_, index) => currentYear - index)
 
   return (
     <div>
@@ -27,9 +29,11 @@ export function YearSelector({ selectedYear, onYearChange, darkMode }) {
           color: theme.TEXT
         }}
       >
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-        <option value="2023">2023</option>
+        {years.map(year => (
+          <option key={year} value={String(year)}>
+            {year}
+          </option>
+        ))}
       </select>
     </div>
   )

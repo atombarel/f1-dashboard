@@ -15,10 +15,10 @@ const api = axios.create({
 export const f1Api = {
   /**
    * Get meetings (races) for a specific year, excluding testing sessions
-   * @param {number} year - The year to fetch meetings for (default: 2025)
+   * @param {number} year - The year to fetch meetings for (default: current year)
    * @returns {Promise<Array>} Array of meeting objects
    */
-  getMeetings: async (year = 2025) => {
+  getMeetings: async (year = new Date().getFullYear()) => {
     try {
       const response = await api.get('/meetings', { params: { year } })
       return response.data.filter(meeting => 
@@ -210,4 +210,3 @@ const filterOutlierLapTimes = (laps) => {
   
   return finalFiltered
 }
-
