@@ -72,8 +72,10 @@ npx wrangler secret put ADMIN_TOKEN
 Ensuite chaque push sur `main` lance `.github/workflows/ci.yml` : typecheck, tests, build, migrations D1, déploiement.
 Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Workflows) et `CLOUDFLARE_ACCOUNT_ID`.
 
-Le Cache API ne fonctionne que sur un **domaine personnalisé** (pas sur `*.workers.dev`) : ajouter une route
-`custom_domain` dans `wrangler.jsonc`.
+Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` dans `wrangler.jsonc`, nécessaire aussi
+pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). Ce domaine est encore rattaché à l'ancien Worker
+`f1-api-cache-production` : le détacher (ou supprimer ce Worker) avant le premier déploiement. L'ancien projet Pages
+`f1-session-laps` peut ensuite être supprimé.
 
 Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 sessions en parallèle max).
 
