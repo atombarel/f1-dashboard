@@ -13,7 +13,7 @@
     "noEmit": true,
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/worker.tsbuildinfo",
-    "types": ["./worker/worker-env.d.ts"],
+    "types": [],
     "paths": { "@shared/*": ["./shared/*"] }
   },
   "include": ["worker", "shared"]
