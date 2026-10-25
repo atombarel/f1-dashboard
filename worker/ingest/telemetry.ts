@@ -16,6 +16,51 @@ export function compactLocation(raw: OF1Location[], sessionStart: number): Compa
   return { t: rows.map((r) => r[0]), x: rows.map((r) => r[1]), y: rows.map((r) => r[2]) }
 }
 
+/** Car channels of one driver, times in ms since session start, sorted. */
+export interface CompactCar {
+  t: number[]
+  v: number[]
+  th: number[]
+  br: number[]
+  g: number[]
+  rpm: number[]
+  drs: (number | null)[]
+}
+
+export function compactCar(raw: OF1CarData[], sessionStart: number): CompactCar {
+  const rows = raw
+    .map((c) => ({ ...c, ms: Date.parse(c.date) - sessionStart }))
+    .filter((c) => Number.isFinite(c.ms))
+    .sort((a, b) => a.ms - b.ms)
+  return {
+    t: rows.map((r) => r.ms),
+    v: rows.map((r) => r.speed),
+    th: rows.map((r) => r.throttle),
+    br: rows.map((r) => r.brake),
+    g: rows.map((r) => r.n_gear),
+    rpm: rows.map((r) => r.rpm),
+    drs: rows.map((r) => r.drs),
+  }
+}
+
+/** Group a multi-driver payload (time-window batch) by driver number. */
+export function byDriver<T extends { driver_number: number }>(rows: T[]): Map<number, T[]> {
+  const out = new Map<number, T[]>()
+  for (const r of rows) (out.get(r.driver_number) ?? out.set(r.driver_number, []).get(r.driver_number)!).push(r)
+  return out
+}
+
+/** Concatenate time-window partials of the same series (windows are disjoint, so a sort is enough). */
+export function mergeSeries<T extends { t: number[] }>(parts: T[]): T {
+  const keys = Object.keys(parts[0] ?? { t: [] }) as (keyof T)[]
+  const order = parts
+    .flatMap((p, pi) => p.t.map((t, i) => [t, pi, i] as const))
+    .sort((a, b) => a[0] - b[0])
+  const out = {} as Record<keyof T, unknown[]>
+  for (const k of keys) out[k] = order.map(([, pi, i]) => (parts[pi][k] as unknown[])[i])
+  return out as unknown as T
+}
+
 /** Linear interpolation of the track at time `at` (ms). `hint` keeps the search O(n) over a sorted sweep. */
 function sampleTrack(track: CompactTrack, at: number, hint: { i: number }): [number, number] | null {
   const { t, x, y } = track
@@ -36,15 +81,19 @@ function sampleTrack(track: CompactTrack, at: number, hint: { i: number }): [num
  */
 export function buildDriverTelemetry(
   driverNumber: number,
-  car: OF1CarData[],
+  car: CompactCar,
   track: CompactTrack,
   laps: LapRow[],
-  sessionStart: number,
 ): DriverTelemetry {
-  const samples = car
-    .map((c) => ({ ...c, ms: Date.parse(c.date) - sessionStart }))
-    .filter((c) => Number.isFinite(c.ms))
-    .sort((a, b) => a.ms - b.ms)
+  const samples = car.t.map((ms, i) => ({
+    ms,
+    speed: car.v[i],
+    throttle: car.th[i],
+    brake: car.br[i],
+    n_gear: car.g[i],
+    rpm: car.rpm[i],
+    drs: car.drs[i],
+  }))
 
   const out: DriverTelemetry = { driverNumber, laps: {} }
   let cursor = 0

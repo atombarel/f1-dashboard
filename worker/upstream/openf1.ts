@@ -13,10 +13,19 @@ export interface Upstream {
 
 type Params = Record<string, string | number | undefined>
 
+/**
+ * Keys may carry an OpenF1 comparison operator: { 'date>=': '2026-…', 'meeting_key<=': 1296 }
+ * becomes `date>=2026-…&meeting_key<=1296`.
+ */
 function buildUrl(base: string, path: string, params: Params) {
-  const url = new URL(`${base}/${path}`)
-  for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, String(v))
-  return url.toString()
+  const query = Object.entries(params)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => {
+      const m = /^(.*?)(>=|<=|>|<)$/.exec(k)
+      return m ? `${encodeURIComponent(m[1])}${m[2]}${encodeURIComponent(String(v))}` : `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`
+    })
+    .join('&')
+  return `${base}/${path}${query ? `?${query}` : ''}`
 }
 
 function gate(env: Env, name: string): DurableObjectStub<UpstreamGate> {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '../shared/types'
 import { buildBundle, parseClock, podiumOf, type RawSessionData } from '../worker/ingest/bundle'
-import { buildDriverTelemetry, compactLocation } from '../worker/ingest/telemetry'
+import { buildDriverTelemetry, compactCar, compactLocation, mergeSeries } from '../worker/ingest/telemetry'
 
 const dir = new URL('./fixtures/singapore-2026/', import.meta.url)
 const load = <T>(name: string): T => JSON.parse(readFileSync(new URL(`${name}.json`, dir), 'utf8'))
@@ -86,7 +86,7 @@ describe('telemetry', () => {
   it('slices laps, integrates distance and attaches positions', () => {
     const start = Date.parse(session.dateStart)
     const bundle = buildBundle(session, meeting, raw, {})
-    const tel = buildDriverTelemetry(3, load('car_3'), compactLocation(load('loc_3'), start), bundle.laps[3], start)
+    const tel = buildDriverTelemetry(3, compactCar(load('car_3'), start), compactLocation(load('loc_3'), start), bundle.laps[3])
     const lap = tel.laps[20]
     expect(lap).toBeDefined()
     const length = lap.d.at(-1)!
@@ -114,5 +114,21 @@ describe('telemetry codec', () => {
     const lap = { t: [0, 270, 540], d: [0, 22.4, 45.1], v: [290, 291, 289], th: [100, 100, 99], br: [0, 0, 1], g: [8, 8, 7], rpm: [11230, 11300, 11050], drs: [0, 0, 0], x: [100, 130, 161], y: [-5, -9, -12] }
     const out = unpackTelemetry(packTelemetry({ driverNumber: 1, laps: { 3: lap } }))
     expect(out.laps[3]).toEqual(lap)
+  })
+})
+
+describe('time-window batching', () => {
+  it('gives the same telemetry as one request per driver', () => {
+    const start = Date.parse(session.dateStart)
+    const bundle = buildBundle(session, meeting, raw, {})
+    const car = load<{ date: string }[]>('car_3')
+    const loc = load<{ date: string }[]>('loc_3')
+    const whole = buildDriverTelemetry(3, compactCar(car as never, start), compactLocation(loc as never, start), bundle.laps[3])
+    // split at an arbitrary instant, as two windows would, and merge back (in reverse order on purpose)
+    const cut = car[300].date
+    const carParts = [car.filter((c) => c.date >= cut), car.filter((c) => c.date < cut)].map((p) => compactCar(p as never, start))
+    const locParts = [loc.filter((c) => c.date >= cut), loc.filter((c) => c.date < cut)].map((p) => compactLocation(p as never, start))
+    const merged = buildDriverTelemetry(3, mergeSeries(carParts), mergeSeries(locParts), bundle.laps[3])
+    expect(merged).toEqual(whole)
   })
 })

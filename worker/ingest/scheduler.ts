@@ -8,7 +8,10 @@ import type { IngestParams } from './workflow'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 /** Concurrent background workflows. User-triggered ones bypass this. */
-const MAX_BACKGROUND = 4
+const MAX_BACKGROUND = 3
+/** Weekends fetched together by one backfill run. */
+const MEETINGS_PER_BATCH = 6
+const MAX_KEY_SPAN = 8
 /** Telemetry runs are ~45 requests each: keep them from starving the base backfill. */
 const MAX_TELEMETRY = 2
 
@@ -99,22 +102,30 @@ export async function pump(env: Env) {
       })
       continue
     }
-    // backlog: batch the whole weekend into one run
-    if (!meetings.has(row.meeting_key)) {
-      if (meetings.size >= slots) continue
-      meetings.set(row.meeting_key, [])
-    }
+    // backlog: batch whole weekends into one run
+    if (!meetings.has(row.meeting_key)) meetings.set(row.meeting_key, [])
     meetings.get(row.meeting_key)!.push(row)
   }
-  for (const [meetingKey, rows] of meetings) {
+  // Group neighbouring weekends of the same season (key range kept tight so payloads stay small).
+  const batches: { year: number; keys: number[]; rows: typeof candidates }[] = []
+  for (const [key, rows] of meetings) {
+    const b = batches.find((x) => x.year === rows[0].year && x.keys.length < MEETINGS_PER_BATCH && Math.max(...x.keys, key) - Math.min(...x.keys, key) <= MAX_KEY_SPAN)
+    if (b) {
+      b.keys.push(key)
+      b.rows.push(...rows)
+    } else batches.push({ year: rows[0].year, keys: [key], rows: [...rows] })
+  }
+  for (const batch of batches) {
+    if (slots <= 0) break
     const claimed: number[] = []
-    for (const r of rows) if (await claimSession(env.DB, r.session_key)) claimed.push(r.session_key)
+    const at = new Date().toISOString()
+    for (const r of batch.rows) if (await claimSession(env.DB, r.session_key, undefined, at)) claimed.push(r.session_key)
     if (!claimed.length) continue
     slots--
-    const pass = rows.every((r) => r.next_pass === 2) ? 2 : 1
+    const pass = batch.rows.every((r) => r.next_pass === 2) ? 2 : 1
     await env.INGEST_MEETING.create({
-      id: `m${meetingKey}-p${pass}-${Date.now().toString(36)}`,
-      params: { meetingKey, sessionKeys: claimed, pass },
+      id: `m${batch.keys[0]}x${batch.keys.length}-p${pass}-${Date.now().toString(36)}`,
+      params: { meetingKeys: batch.keys, sessionKeys: claimed, pass },
     })
   }
   if (slots <= 0 || (await ingestCandidates(env.DB, 1)).length) return

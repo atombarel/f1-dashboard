@@ -1,7 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { packTelemetry } from '../../shared/codec'
 import { isQualiLike, isRaceLike } from '../../shared/sessions'
-import type { DatasetName, DatasetStatus, LapRow, SessionBundle } from '../../shared/types'
+import type { DatasetName, DatasetStatus, SessionBundle } from '../../shared/types'
 import {
   getMeetingRow,
   getSessionRow,
@@ -27,7 +27,17 @@ import {
 import { buildBundle, podiumOf, type RawSessionData } from './bundle'
 import { pump } from './scheduler'
 import { refreshStandings } from './standings'
-import { assembleReplay, buildDriverTelemetry, compactLocation, resampleTrack, type CompactTrack } from './telemetry'
+import {
+  assembleReplay,
+  buildDriverTelemetry,
+  byDriver,
+  compactCar,
+  compactLocation,
+  mergeSeries,
+  resampleTrack,
+  type CompactCar,
+  type CompactTrack,
+} from './telemetry'
 
 export interface IngestParams {
   sessionKey: number
@@ -50,6 +60,9 @@ export const OPENF1_DATASETS = [
   'position',
   'overtakes',
 ] as const satisfies readonly DatasetName[]
+
+/** ~9 MB of car data for a full grid: big enough to save requests, small enough for Worker memory. */
+const TELEMETRY_WINDOW_S = 600
 
 export const RETRY = { retries: { limit: 6, delay: '15 seconds', backoff: 'exponential' }, timeout: '10 minutes' } as const
 
@@ -173,33 +186,67 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
     })
   }
 
+  /**
+   * Telemetry for every driver, fetched in 10-minute windows covering all drivers at once
+   * (~12 requests for a race instead of 2 per driver), then regrouped per driver. Windows are
+   * contiguous and span every lap plus margins, so the result is identical to per-driver fetches.
+   */
   private async ingestTelemetry(step: WorkflowStep, up: Upstream, session: SessionRow, bundleVersion: string, run: string) {
+    const sessionStart = Date.parse(session.date_start)
     const meta = await step.do('telemetry plan', async () => {
       const bundle = (await getJson<SessionBundle>(this.env.BUNDLES, keys.bundle(session.session_key, bundleVersion)))!
       const drivers = Object.entries(bundle.laps)
         .filter(([, laps]) => laps.some((l) => l.t !== null))
         .map(([d]) => Number(d))
-      // counted as a running job by the scheduler while the ~45 requests go through
+      const starts = Object.values(bundle.laps).flatMap((l) => l.flatMap((x) => (x.at !== null ? [x.at] : [])))
+      const ends = Object.values(bundle.laps).flatMap((l) => l.flatMap((x) => (x.at !== null ? [x.at + (x.t ?? 0)] : [])))
+      // margins cover the replay range (first lap − 5 s … last lap + 10 s) with room for interpolation
+      const from = Math.floor(Math.min(...starts)) - 15
+      const to = Math.ceil(Math.max(...ends)) + 20
+      const windows: [number, number][] = []
+      for (let a = from; a < to; a += TELEMETRY_WINDOW_S) windows.push([a, Math.min(a + TELEMETRY_WINDOW_S, to)])
+      // counted as a running job by the scheduler while the requests go through
       await markTelemetry(this.env.DB, session.session_key, 'queued', null)
       // Telemetry is immutable once the session is over: version it independently from the bundle.
-      return { drivers, telemetryVersion: `t${run.slice(-10)}` }
+      return { drivers, windows: drivers.length && starts.length ? windows : [], telemetryVersion: `t${run.slice(-10)}` }
     })
-    const sessionStart = Date.parse(session.date_start)
+    const iso = (s: number) => new Date(sessionStart + s * 1000).toISOString().slice(0, 19)
+    const wanted = new Set(meta.drivers)
+
+    for (const [i, [a, b]] of meta.windows.entries()) {
+      await step.do(`location window ${i}`, RETRY, async () => {
+        const raw = await openf1<OF1Location & { driver_number: number }>(up, 'location', { session_key: session.session_key, 'date>=': iso(a), 'date<': iso(b) })
+        for (const [driver, rows] of byDriver(raw))
+          if (wanted.has(driver)) await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}-${i}`), compactLocation(rows, sessionStart))
+        return raw.length
+      })
+      await step.do(`car window ${i}`, RETRY, async () => {
+        const raw = await openf1<OF1CarData & { driver_number: number }>(up, 'car_data', { session_key: session.session_key, 'date>=': iso(a), 'date<': iso(b) })
+        for (const [driver, rows] of byDriver(raw))
+          if (wanted.has(driver)) await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `car-${driver}-${i}`), compactCar(rows, sessionStart))
+        return raw.length
+      })
+    }
+
+    const readParts = async <T extends { t: number[] }>(prefix: string, driver: number): Promise<T | null> => {
+      const parts: T[] = []
+      for (let i = 0; i < meta.windows.length; i++) {
+        const p = await getJson<T>(this.env.BUNDLES, keys.scratch(session.session_key, run, `${prefix}-${driver}-${i}`))
+        if (p?.t.length) parts.push(p)
+      }
+      return parts.length ? mergeSeries(parts) : null
+    }
 
     for (const driver of meta.drivers) {
-      await step.do(`location ${driver}`, RETRY, async () => {
-        const raw = await openf1<OF1Location>(up, 'location', { session_key: session.session_key, driver_number: driver })
-        const track = compactLocation(raw, sessionStart)
-        await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}`), track)
-        return track.t.length
-      })
-      await step.do(`car data ${driver}`, RETRY, async () => {
-        const car = await openf1<OF1CarData>(up, 'car_data', { session_key: session.session_key, driver_number: driver })
-        const track = (await getJson<CompactTrack>(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}`)))!
+      await step.do(`telemetry ${driver}`, RETRY, async () => {
+        const car = await readParts<CompactCar>('car', driver)
+        const track = (await readParts<CompactTrack>('loc', driver)) ?? { t: [], x: [], y: [] }
+        if (!car) return 0
         const bundle = (await getJson<SessionBundle>(this.env.BUNDLES, keys.bundle(session.session_key, bundleVersion)))!
-        const laps: LapRow[] = bundle.laps[driver] ?? []
-        const tel = buildDriverTelemetry(driver, car, track, laps, sessionStart)
+        const tel = buildDriverTelemetry(driver, car, track, bundle.laps[driver] ?? [])
         await putJson(this.env.BUNDLES, keys.telemetry(session.session_key, meta.telemetryVersion, driver), packTelemetry(tel))
+        // keep the merged track for the replay step
+        await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}`), track)
         return Object.keys(tel.laps).length
       })
     }

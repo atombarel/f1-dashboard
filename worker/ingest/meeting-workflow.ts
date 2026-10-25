@@ -7,7 +7,8 @@ import { pump } from './scheduler'
 import { clearScratch, ensureCircuit, OPENF1_DATASETS, publishBundle, readRaw, RETRY } from './workflow'
 
 export interface IngestMeetingParams {
-  meetingKey: number
+  /** up to a handful of weekends of the same season, fetched together */
+  meetingKeys: number[]
   /** sessions claimed by the scheduler for this run */
   sessionKeys: number[]
   pass: 1 | 2
@@ -20,31 +21,40 @@ const JOLPICA_PATH: Partial<Record<SessionRow['kind'], string>> = {
 }
 
 /**
- * Backfill a whole weekend at once. OpenF1 filters every dataset by meeting_key, so a Grand Prix
- * costs ~12 upstream requests instead of ~11 per session: the difference matters a lot when the
- * shared upstream quota is the bottleneck.
+ * Backfill several weekends at once. OpenF1 filters every dataset by a meeting_key range, so six
+ * Grands Prix (~30 sessions) cost 9 OpenF1 requests instead of ~11 per session: the difference
+ * matters a lot when the shared upstream quota is the bottleneck.
  */
 export class IngestMeetingWorkflow extends WorkflowEntrypoint<Env, IngestMeetingParams> {
   async run(event: WorkflowEvent<IngestMeetingParams>, step: WorkflowStep) {
-    const { meetingKey, sessionKeys, pass } = event.payload
+    const { meetingKeys, sessionKeys, pass } = event.payload
     const run = event.instanceId.replace(/[^a-z0-9-]/gi, '').slice(-24)
     const up: Upstream = { env: this.env, priority: 'low' }
 
     const ctx = await step.do('load context', async () => {
-      const meeting = await getMeetingRow(this.env.DB, meetingKey)
-      if (!meeting) throw new Error(`unknown meeting ${meetingKey}`)
+      const meetings = []
+      for (const key of meetingKeys) {
+        const m = await getMeetingRow(this.env.DB, key)
+        if (m) meetings.push(m)
+      }
       const placeholders = sessionKeys.map(() => '?').join(',')
       const { results } = await this.env.DB.prepare(`SELECT * FROM sessions WHERE session_key IN (${placeholders})`)
         .bind(...sessionKeys)
         .all<SessionRow>()
-      return { meeting, sessions: results }
+      return { meetings, sessions: results }
     })
+    const meetingOf = (s: SessionRow) => ctx.meetings.find((m) => m.meeting_key === s.meeting_key)!
+    // one weekend: meeting_key=…; several: a key range, rows of unrelated sessions are dropped
+    const filter =
+      meetingKeys.length === 1
+        ? { meeting_key: meetingKeys[0] }
+        : { 'meeting_key>=': Math.min(...meetingKeys), 'meeting_key<=': Math.max(...meetingKeys) }
 
     // One request per dataset for the whole weekend, split per session into scratch objects.
     const counts: Record<string, Record<number, number>> = {}
     for (const ds of OPENF1_DATASETS) {
       counts[ds] = await step.do(`fetch ${ds}`, RETRY, async () => {
-        const rows = await openf1<{ session_key: number }>(up, ds, { meeting_key: meetingKey })
+        const rows = await openf1<{ session_key: number }>(up, ds, filter)
         const per: Record<number, number> = {}
         for (const s of ctx.sessions) {
           const own = rows.filter((r) => r.session_key === s.session_key)
@@ -60,8 +70,8 @@ export class IngestMeetingWorkflow extends WorkflowEntrypoint<Env, IngestMeeting
       const path = JOLPICA_PATH[s.kind]
       await step.do(`classification ${s.session_key}`, RETRY, async () => {
         const race =
-          path && ctx.meeting.round !== null
-            ? ((await jolpica<JRaceTable>(up, `${s.year}/${ctx.meeting.round}/${path}`, { limit: 100 })).RaceTable.Races[0] ?? null)
+          path && meetingOf(s).round !== null
+            ? ((await jolpica<JRaceTable>(up, `${s.year}/${meetingOf(s).round}/${path}`, { limit: 100 })).RaceTable.Races[0] ?? null)
             : null
         await putJson(this.env.BUNDLES, keys.scratch(s.session_key, run, 'jolpica'), race)
         return race ? 'ok' : 'empty'
@@ -80,11 +90,13 @@ export class IngestMeetingWorkflow extends WorkflowEntrypoint<Env, IngestMeeting
         const read = async <T>(name: string) => (await getJson<T>(this.env.BUNDLES, keys.scratch(s.session_key, run, name)))!
         const raw = await readRaw(read)
         sources.jolpica = (raw.jolpica as JRace | null) ? 'ok' : 'empty'
-        return publishBundle(this.env, s, ctx.meeting, raw, sources, pass)
+        return publishBundle(this.env, s, meetingOf(s), raw, sources, pass)
       })
     }
 
-    await step.do('circuit layout', RETRY, async () => ensureCircuit(this.env, up, ctx.meeting, ctx.meeting.year))
+    for (const m of ctx.meetings) {
+      await step.do(`circuit layout ${m.meeting_key}`, RETRY, async () => ensureCircuit(this.env, up, m, m.year))
+    }
 
     await step.do('cleanup scratch', async () => {
       for (const s of ctx.sessions) await clearScratch(this.env, s.session_key, run)
@@ -96,6 +108,6 @@ export class IngestMeetingWorkflow extends WorkflowEntrypoint<Env, IngestMeeting
       return true
     })
 
-    return { meetingKey, sessions: sessionKeys.length }
+    return { meetings: meetingKeys.length, sessions: sessionKeys.length }
   }
 }

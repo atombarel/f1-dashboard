@@ -183,7 +183,8 @@ export async function upsertSessions(db: D1Database, rows: SessionCalendarRow[])
  * or ran out of attempts.
  */
 export const RETRY_GAP_MS = 8 * 60 * 1000
-export async function claimSession(db: D1Database, key: number, staleAfterMs = 30 * 60 * 1000): Promise<boolean> {
+/** `at` lets a batch share one queued_at, which is how running batches are counted. */
+export async function claimSession(db: D1Database, key: number, staleAfterMs = 30 * 60 * 1000, at = now()): Promise<boolean> {
   const staleBefore = new Date(Date.now() - staleAfterMs).toISOString()
   const retryBefore = new Date(Date.now() - RETRY_GAP_MS).toISOString()
   const res = await db
@@ -193,7 +194,7 @@ export async function claimSession(db: D1Database, key: number, staleAfterMs = 3
          AND (queued_at IS NULL OR queued_at < ?4)
          AND (ingest_state != 'queued' OR queued_at < ?3)`,
     )
-    .bind(now(), key, staleBefore, retryBefore, MAX_ATTEMPTS)
+    .bind(at, key, staleBefore, retryBefore, MAX_ATTEMPTS)
     .run()
   return res.meta.changes > 0
 }
@@ -262,9 +263,9 @@ export async function countQueued(db: D1Database): Promise<number> {
   // a telemetry run can take a while when the upstream throttles: give it more time before calling it stale
   const staleTelemetry = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   const row = await db
-    // one slot per running weekend batch (or single-session run) plus one per running telemetry job
+    // one slot per running batch (sessions claimed together share their queued_at) plus one per telemetry job
     .prepare(`SELECT
-         COUNT(DISTINCT CASE WHEN ingest_state = 'queued' AND queued_at >= ?1 THEN meeting_key END)
+         COUNT(DISTINCT CASE WHEN ingest_state = 'queued' AND queued_at >= ?1 THEN queued_at END)
        + COUNT(CASE WHEN telemetry_state = 'queued' AND updated_at >= ?2 THEN 1 END) AS n
        FROM sessions`)
     .bind(staleQueue, staleTelemetry)
