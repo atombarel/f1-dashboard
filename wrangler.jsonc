@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "f1-dashboard",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The SPA is served from static assets; only /api/* hits the Worker first.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "vars": {
+    "OPENF1_BASE": "https://api.openf1.org/v1",
+    "JOLPICA_BASE": "https://api.jolpi.ca/ergast/f1",
+    // Oldest season OpenF1 covers; backfill never goes further back.
+    "FIRST_SEASON": "2023"
+  },
+
+  "d1_databases": [
+    { "binding": "DB", "database_name": "f1-db", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [{ "binding": "BUNDLES", "bucket_name": "f1-bundles" }],
+
+  // Global rate limiter in front of every upstream call (OpenF1 caps at 3 req/s).
+  "durable_objects": {
+    "bindings": [{ "name": "GATE", "class_name": "UpstreamGate" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UpstreamGate"] }],
+
+  "workflows": [
+    { "name": "f1-ingest-session", "binding": "INGEST", "class_name": "IngestSessionWorkflow" }
+  ],
+
+  "triggers": {
+    // Calendar sync + ingestion of freshly finished sessions, and a nightly backfill/standings pass.
+    "crons": ["*/10 * * * *", "30 4 * * *"]
+  }
+}
