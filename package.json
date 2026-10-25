@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "cf-typegen": "wrangler types --env-interface Env --env-file .dev.vars.example worker/worker-env.d.ts",
+    "cf-typegen": "wrangler types worker/worker-env.d.ts --env-interface Env --env-file .dev.vars.example",
     "db:migrate:local": "wrangler d1 migrations apply f1-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply f1-db --remote",
     "deploy": "vite build && wrangler d1 migrations apply f1-db --remote && wrangler deploy"
