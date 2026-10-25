@@ -21,6 +21,7 @@ const intParam = (v: string | undefined) => {
 /** Shorter caches while something is happening on track; past seasons barely change. */
 function calendarCache(meetings: MeetingSummary[]) {
   const now = Date.now()
+  if (!meetings.length) return shortLived(15, 30, 0) // calendar not synced yet
   if (meetings.every((m) => Date.parse(m.dateEnd) < now - 7 * 86400_000)) return shortLived(3600, 86400)
   const active = meetings.some((m) =>
     m.sessions.some((s) => {

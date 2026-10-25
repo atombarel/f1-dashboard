@@ -8,6 +8,9 @@ export const shortLived = (browser: number, edge = browser * 2, swr = Math.max(e
 
 export const NO_STORE = 'no-store'
 
+/** Part of every edge-cache key: bump it to drop everything cached by previous deployments. */
+const EDGE_CACHE_EPOCH = '2'
+
 async function weakEtag(body: string) {
   const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(body))
   return `W/"${[...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('')}"`
@@ -53,7 +56,9 @@ export async function r2Gzip(c: Context, bucket: R2Bucket, key: string, cacheCon
 export const edgeCache: MiddlewareHandler = async (c, next) => {
   if (c.req.method !== 'GET' || c.req.query('nocache') !== undefined) return next()
   const cache = caches.default
-  const key = new Request(c.req.url, { method: 'GET' })
+  const url = new URL(c.req.url)
+  url.searchParams.set('__edge', EDGE_CACHE_EPOCH)
+  const key = new Request(url.toString(), { method: 'GET' })
   const hit = await cache.match(key)
   if (hit) {
     const etag = hit.headers.get('etag')
