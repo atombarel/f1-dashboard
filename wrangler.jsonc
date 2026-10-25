@@ -36,7 +36,8 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UpstreamGate"] }],
 
   "workflows": [
-    { "name": "f1-ingest-session", "binding": "INGEST", "class_name": "IngestSessionWorkflow" }
+    { "name": "f1-ingest-session", "binding": "INGEST", "class_name": "IngestSessionWorkflow" },
+    { "name": "f1-ingest-meeting", "binding": "INGEST_MEETING", "class_name": "IngestMeetingWorkflow" }
   ],
 
   "triggers": {

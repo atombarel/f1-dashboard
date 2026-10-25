@@ -82,16 +82,39 @@ export async function tick(env: Env) {
 export async function pump(env: Env) {
   let slots = MAX_BACKGROUND - (await countQueued(env.DB))
   if (slots <= 0) return
-  for (const row of await ingestCandidates(env.DB, slots)) {
-    if (!(await claimSession(env.DB, row.session_key))) continue
-    slots--
+  const candidates = await ingestCandidates(env.DB, 60)
+  const meetings = new Map<number, typeof candidates>()
+  for (const row of candidates) {
+    if (slots <= 0) break
     const fresh = Date.now() - Date.parse(row.date_end) < 2 * DAY
-    await startWorkflow(env, {
-      sessionKey: row.session_key,
-      pass: row.next_pass === 2 ? 2 : 1,
-      // fresh sessions get everything right away; the backlog gets telemetry in a second phase
-      telemetry: fresh && !row.telemetry_version && wantsTelemetry(row, true),
-      priority: fresh ? 'high' : 'low',
+    if (fresh) {
+      // just finished: one fast, high-priority run per session with telemetry included
+      if (!(await claimSession(env.DB, row.session_key))) continue
+      slots--
+      await startWorkflow(env, {
+        sessionKey: row.session_key,
+        pass: row.next_pass === 2 ? 2 : 1,
+        telemetry: !row.telemetry_version && wantsTelemetry(row, true),
+        priority: 'high',
+      })
+      continue
+    }
+    // backlog: batch the whole weekend into one run
+    if (!meetings.has(row.meeting_key)) {
+      if (meetings.size >= slots) continue
+      meetings.set(row.meeting_key, [])
+    }
+    meetings.get(row.meeting_key)!.push(row)
+  }
+  for (const [meetingKey, rows] of meetings) {
+    const claimed: number[] = []
+    for (const r of rows) if (await claimSession(env.DB, r.session_key)) claimed.push(r.session_key)
+    if (!claimed.length) continue
+    slots--
+    const pass = rows.every((r) => r.next_pass === 2) ? 2 : 1
+    await env.INGEST_MEETING.create({
+      id: `m${meetingKey}-p${pass}-${Date.now().toString(36)}`,
+      params: { meetingKey, sessionKeys: claimed, pass },
     })
   }
   if (slots <= 0 || (await ingestCandidates(env.DB, 1)).length) return

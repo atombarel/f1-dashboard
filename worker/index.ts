@@ -9,6 +9,7 @@ import { keys } from './lib/store'
 
 export { UpstreamGate } from './upstream/gate'
 export { IngestSessionWorkflow } from './ingest/workflow'
+export { IngestMeetingWorkflow } from './ingest/meeting-workflow'
 
 type App = { Bindings: Env }
 const app = new Hono<App>().basePath('/api')

@@ -39,7 +39,7 @@ export interface IngestParams {
   priority: Priority
 }
 
-const OPENF1_DATASETS = [
+export const OPENF1_DATASETS = [
   'drivers',
   'laps',
   'stints',
@@ -51,10 +51,10 @@ const OPENF1_DATASETS = [
   'overtakes',
 ] as const satisfies readonly DatasetName[]
 
-const RETRY = { retries: { limit: 6, delay: '15 seconds', backoff: 'exponential' }, timeout: '10 minutes' } as const
+export const RETRY = { retries: { limit: 6, delay: '15 seconds', backoff: 'exponential' }, timeout: '10 minutes' } as const
 
 /** Datasets that only exist for some session kinds — an empty answer there is not suspicious. */
-const OPTIONAL: Partial<Record<DatasetName, (row: SessionRow) => boolean>> = {
+export const OPTIONAL: Partial<Record<DatasetName, (row: SessionRow) => boolean>> = {
   position: (r) => !isRaceLike(r.kind),
   overtakes: (r) => !isRaceLike(r.kind),
   pit: () => true,
@@ -95,21 +95,7 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
       }).catch(() => false)
     }
 
-    await step.do('circuit layout', RETRY, async () => {
-      const key = keys.circuit(ctx.meeting.circuit_key ?? 0, ctx.session.year)
-      if (!ctx.meeting.circuit_key || (await this.env.BUNDLES.head(key))) return true
-      const c = await multiviewerCircuit(up, ctx.meeting.circuit_key, ctx.session.year)
-      if (!c) return false
-      await putJson(this.env.BUNDLES, key, {
-        circuitKey: ctx.meeting.circuit_key,
-        year: ctx.session.year,
-        x: c.x,
-        y: c.y,
-        rotation: c.rotation,
-        corners: c.corners.map((k) => ({ number: k.number, letter: k.letter ?? '', angle: k.angle, x: k.trackPosition.x, y: k.trackPosition.y })),
-      })
-      return true
-    })
+    await step.do('circuit layout', RETRY, async () => ensureCircuit(this.env, up, ctx.meeting, ctx.session.year))
 
     if (event.payload.telemetry && version && (event.payload.telemetryOnly || !ctx.session.telemetry_version)) {
       try {
@@ -123,13 +109,7 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
     }
 
     await step.do('cleanup scratch', async () => {
-      const prefix = `tmp/${sessionKey}/${run}/`
-      let cursor: string | undefined
-      do {
-        const list = await this.env.BUNDLES.list({ prefix, cursor })
-        if (list.objects.length) await this.env.BUNDLES.delete(list.objects.map((o) => o.key))
-        cursor = list.truncated ? list.cursor : undefined
-      } while (cursor)
+      await clearScratch(this.env, sessionKey, run)
       return true
     })
 
@@ -189,32 +169,7 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
 
     return step.do('build bundle', RETRY, async () => {
       const read = async <T>(name: string) => (await getJson<T>(this.env.BUNDLES, keys.scratch(session.session_key, run, name)))!
-      const raw: RawSessionData = {
-        drivers: await read('drivers'),
-        laps: await read('laps'),
-        stints: await read('stints'),
-        pit: await read('pit'),
-        race_control: await read('race_control'),
-        weather: await read('weather'),
-        session_result: await read('session_result'),
-        position: await read('position'),
-        overtakes: await read('overtakes'),
-        jolpica: await read<JRace | null>('jolpica'),
-      }
-      const { sessions: _, ...meetingSummary } = toMeetingSummary(meeting, [])
-      const summary = { ...toSessionSummary(session), status: 'final' as const, version: null, telemetryVersion: null, podium: null }
-      const bundle = buildBundle(summary, meetingSummary, raw, sources)
-      const version = await contentHash(bundle)
-      const podium = isRaceLike(session.kind) || isQualiLike(session.kind) || session.kind === 'practice' ? podiumOf(bundle) : []
-      const full: SessionBundle = {
-        ...bundle,
-        session: { ...bundle.session, version, podium },
-        version,
-        generatedAt: new Date().toISOString(),
-      }
-      await putJson(this.env.BUNDLES, keys.bundle(session.session_key, version), full)
-      await markIngested(this.env.DB, session.session_key, pass, version, podium)
-      return version
+      return publishBundle(this.env, session, meeting, await readRaw(read), sources, pass)
     })
   }
 
@@ -275,4 +230,67 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
       return true
     })
   }
+}
+
+type MeetingRowLike = Parameters<typeof toMeetingSummary>[0]
+
+export async function readRaw(read: <T>(name: string) => Promise<T>): Promise<RawSessionData> {
+  return {
+    drivers: await read('drivers'),
+    laps: await read('laps'),
+    stints: await read('stints'),
+    pit: await read('pit'),
+    race_control: await read('race_control'),
+    weather: await read('weather'),
+    session_result: await read('session_result'),
+    position: await read('position'),
+    overtakes: await read('overtakes'),
+    jolpica: await read<JRace | null>('jolpica'),
+  }
+}
+
+/** Normalise, hash and publish a session bundle, then flip the session to "done" in D1. */
+export async function publishBundle(
+  env: Env,
+  session: SessionRow,
+  meeting: MeetingRowLike,
+  raw: RawSessionData,
+  sources: Partial<Record<DatasetName, DatasetStatus>>,
+  pass: 1 | 2,
+): Promise<string> {
+  const { sessions: _, ...meetingSummary } = toMeetingSummary(meeting, [])
+  const summary = { ...toSessionSummary(session), status: 'final' as const, version: null, telemetryVersion: null, podium: null }
+  const bundle = buildBundle(summary, meetingSummary, raw, sources)
+  const version = await contentHash(bundle)
+  const podium = isRaceLike(session.kind) || isQualiLike(session.kind) || session.kind === 'practice' ? podiumOf(bundle) : []
+  const full: SessionBundle = { ...bundle, session: { ...bundle.session, version, podium }, version, generatedAt: new Date().toISOString() }
+  await putJson(env.BUNDLES, keys.bundle(session.session_key, version), full)
+  await markIngested(env.DB, session.session_key, pass, version, podium)
+  return version
+}
+
+export async function ensureCircuit(env: Env, up: Upstream, meeting: MeetingRowLike, year: number): Promise<boolean> {
+  const key = keys.circuit(meeting.circuit_key ?? 0, year)
+  if (!meeting.circuit_key || (await env.BUNDLES.head(key))) return true
+  const c = await multiviewerCircuit(up, meeting.circuit_key, year)
+  if (!c) return false
+  await putJson(env.BUNDLES, key, {
+    circuitKey: meeting.circuit_key,
+    year,
+    x: c.x,
+    y: c.y,
+    rotation: c.rotation,
+    corners: c.corners.map((k) => ({ number: k.number, letter: k.letter ?? '', angle: k.angle, x: k.trackPosition.x, y: k.trackPosition.y })),
+  })
+  return true
+}
+
+export async function clearScratch(env: Env, sessionKey: number, run: string) {
+  const prefix = `tmp/${sessionKey}/${run}/`
+  let cursor: string | undefined
+  do {
+    const list = await env.BUNDLES.list({ prefix, cursor })
+    if (list.objects.length) await env.BUNDLES.delete(list.objects.map((o) => o.key))
+    cursor = list.truncated ? list.cursor : undefined
+  } while (cursor)
 }

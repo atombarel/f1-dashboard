@@ -262,8 +262,11 @@ export async function countQueued(db: D1Database): Promise<number> {
   // a telemetry run can take a while when the upstream throttles: give it more time before calling it stale
   const staleTelemetry = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sessions
-       WHERE (ingest_state = 'queued' AND queued_at >= ?1) OR (telemetry_state = 'queued' AND updated_at >= ?2)`)
+    // one slot per running weekend batch (or single-session run) plus one per running telemetry job
+    .prepare(`SELECT
+         COUNT(DISTINCT CASE WHEN ingest_state = 'queued' AND queued_at >= ?1 THEN meeting_key END)
+       + COUNT(CASE WHEN telemetry_state = 'queued' AND updated_at >= ?2 THEN 1 END) AS n
+       FROM sessions`)
     .bind(staleQueue, staleTelemetry)
     .first<{ n: number }>()
   return row?.n ?? 0
