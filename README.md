@@ -74,6 +74,9 @@ Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` da
 pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
 `f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
 
+Exploitation : le secret GitHub `ADMIN_TOKEN` est poussé dans le Worker à chaque déploiement ; le workflow manuel
+**Ops** (onglet Actions) affiche l'état d'ingestion et les dernières instances de Workflow.
+
 Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 sessions en parallèle max).
 
 ## API
