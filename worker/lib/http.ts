@@ -3,8 +3,8 @@ import type { Context, MiddlewareHandler } from 'hono'
 export const IMMUTABLE = 'public, max-age=31536000, immutable'
 
 /** Browser keeps it `browser` seconds, the edge `edge` seconds, and both may serve stale while refreshing. */
-export const shortLived = (browser: number, edge = browser * 2) =>
-  `public, max-age=${browser}, s-maxage=${edge}, stale-while-revalidate=${Math.max(edge * 10, 300)}`
+export const shortLived = (browser: number, edge = browser * 2, swr = Math.max(edge * 10, 300)) =>
+  `public, max-age=${browser}, s-maxage=${edge}${swr ? `, stale-while-revalidate=${swr}` : ''}`
 
 export const NO_STORE = 'no-store'
 

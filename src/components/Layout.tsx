@@ -10,7 +10,7 @@ function Logo() {
         <path d="M0 24 L10 0 H40 L36 9 H17 L15 14 H31 L27 24 Z" fill="var(--color-signal)" className="origin-left transition-transform duration-300 group-hover:scale-x-110" />
         <path d="M2 24 L12 0" stroke="var(--color-ink)" strokeWidth="2" />
       </svg>
-      <span className="display text-2xl tracking-tight">
+      <span className="display hidden text-2xl tracking-tight min-[440px]:inline">
         Pit<span className="text-signal">/</span>Wall
       </span>
     </Link>
@@ -23,12 +23,12 @@ function NavLink({ to, params, children, active }: { to: string; params?: Record
       to={to}
       params={params as never}
       className={clsx(
-        'relative px-3 py-2 font-mono text-[11px] uppercase tracking-[0.16em] transition-colors',
+        'relative px-2 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:tracking-[0.16em]',
         active ? 'text-paper' : 'text-muted hover:text-paper',
       )}
     >
       {children}
-      {active && <span className="absolute inset-x-3 -bottom-[13px] h-0.5 bg-signal" />}
+      {active && <span className="absolute inset-x-2 -bottom-[13px] h-0.5 bg-signal sm:inset-x-3" />}
     </Link>
   )
 }
@@ -43,7 +43,7 @@ export function Layout() {
     <div className="flex min-h-dvh flex-col">
       <div className="h-0.5 bg-gradient-to-r from-signal via-signal/40 to-transparent" />
       <header className="sticky top-0 z-50 border-b border-line bg-ink/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-6 px-4 sm:px-6">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Logo />
           <nav className="flex items-center overflow-x-auto">
             <NavLink to="/" active={path === '/'}>

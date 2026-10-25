@@ -177,15 +177,23 @@ export async function upsertSessions(db: D1Database, rows: SessionCalendarRow[])
   )
 }
 
-/** Atomically claim a session for ingestion. Returns false if someone else already queued it recently. */
+/**
+ * Atomically claim a session for ingestion. Refused when it is already queued, was attempted
+ * less than RETRY_GAP ago (so visitors hitting an errored session don't spawn a workflow each),
+ * or ran out of attempts.
+ */
+export const RETRY_GAP_MS = 8 * 60 * 1000
 export async function claimSession(db: D1Database, key: number, staleAfterMs = 30 * 60 * 1000): Promise<boolean> {
   const staleBefore = new Date(Date.now() - staleAfterMs).toISOString()
+  const retryBefore = new Date(Date.now() - RETRY_GAP_MS).toISOString()
   const res = await db
     .prepare(
       `UPDATE sessions SET ingest_state = 'queued', queued_at = ?1, ingest_attempts = ingest_attempts + 1, updated_at = ?1
-       WHERE session_key = ?2 AND (ingest_state != 'queued' OR queued_at < ?3)`,
+       WHERE session_key = ?2 AND ingest_attempts < ?5
+         AND (queued_at IS NULL OR queued_at < ?4)
+         AND (ingest_state != 'queued' OR queued_at < ?3)`,
     )
-    .bind(now(), key, staleBefore)
+    .bind(now(), key, staleBefore, retryBefore, MAX_ATTEMPTS)
     .run()
   return res.meta.changes > 0
 }

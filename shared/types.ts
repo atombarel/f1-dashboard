@@ -229,6 +229,8 @@ export interface SessionMeta {
   replayUrl: string | null
   circuitUrl: string | null
   retryAfter: number | null
+  /** Ingestion gave up (OpenF1 never published this session). */
+  unavailable: boolean
 }
 
 /** Telemetry of one lap, all channels share the same index. */

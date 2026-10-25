@@ -54,6 +54,7 @@ export const sessionMetaQuery = (key: number) =>
     refetchInterval: (q) => {
       const meta = q.state.data
       if (!meta) return false
+      if (meta.unavailable) return false
       if (!meta.bundleUrl) return (meta.retryAfter ?? 10) * 1000
       if (!meta.telemetryUrl && meta.session.kind !== 'testing') return 20_000
       return false

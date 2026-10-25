@@ -115,6 +115,8 @@ export function SessionPage() {
           <Pending title="Pas encore commencée" text="Les données apparaîtront ici quelques minutes après le drapeau à damier." />
         ) : session.status === 'live' ? (
           <Pending live title="Session en cours" text="Les données complètes sont publiées peu après la fin de la session. Cette page se met à jour toute seule." />
+        ) : meta.data.unavailable ? (
+          <Pending title="Données indisponibles" text="OpenF1 n’a pas publié les données de cette session. Nouvel essai automatique dans quelques jours." />
         ) : session.status === 'cancelled' ? (
           <Pending title="Session annulée" text="Aucune donnée pour cette session." />
         ) : (

@@ -3,7 +3,7 @@ import type { HomeResponse, MeetingSummary, SessionMeta, SessionSummary } from '
 import { syncSeason } from './ingest/calendar'
 import { nightly, requestIngestion, requestTelemetry, tick } from './ingest/scheduler'
 import { readStandings, refreshStandings } from './ingest/standings'
-import { getMeeting, getSeasonMeetings, getSessionRow, listYears, toSessionSummary, type SessionRow } from './lib/db'
+import { getMeeting, getSeasonMeetings, getSessionRow, listYears, MAX_ATTEMPTS, toSessionSummary, type SessionRow } from './lib/db'
 import { edgeCache, IMMUTABLE, json, NO_STORE, r2Gzip, shortLived } from './lib/http'
 import { keys } from './lib/store'
 
@@ -18,9 +18,10 @@ const intParam = (v: string | undefined) => {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-/** Shorter caches while something is happening on track. */
+/** Shorter caches while something is happening on track; past seasons barely change. */
 function calendarCache(meetings: MeetingSummary[]) {
   const now = Date.now()
+  if (meetings.every((m) => Date.parse(m.dateEnd) < now - 7 * 86400_000)) return shortLived(3600, 86400)
   const active = meetings.some((m) =>
     m.sessions.some((s) => {
       const start = Date.parse(s.dateStart)
@@ -28,7 +29,7 @@ function calendarCache(meetings: MeetingSummary[]) {
       return now > start - 60 * 60 * 1000 && now < end + 6 * 60 * 60 * 1000
     }),
   )
-  return active ? shortLived(30, 30) : shortLived(300, 600)
+  return active ? shortLived(30, 30, 60) : shortLived(60, 120)
 }
 
 app.use('*', edgeCache)
@@ -61,6 +62,7 @@ function sessionMeta(row: SessionRow, meeting: MeetingSummary, session: SessionS
     replayUrl: row.telemetry_version && (row.kind === 'race' || row.kind === 'sprint') ? `${base}/replay?v=${row.telemetry_version}` : null,
     circuitUrl: meeting.circuitKey ? `/api/circuits/${meeting.circuitKey}/${meeting.year}` : null,
     retryAfter: session.status === 'processing' ? 4 : session.status === 'live' ? 60 : null,
+    unavailable: !row.version && row.ingest_state === 'error' && row.ingest_attempts >= MAX_ATTEMPTS,
   }
 }
 
@@ -73,7 +75,9 @@ app.get('/sessions/:key', async (c) => {
   // First visitor on a finished but not yet ingested session kicks off the ingestion.
   if (session.status === 'processing') c.executionCtx.waitUntil(requestIngestion(c.env, row).catch(console.error))
   const meta = sessionMeta(row, meeting, session)
-  const cc = session.status === 'final' ? (meta.telemetryUrl || row.kind === 'testing' ? shortLived(300, 3600) : shortLived(10, 15)) : NO_STORE
+  // Pointers that are about to change (telemetry still being built) must not be served stale.
+  const settled = session.status === 'final' && (meta.telemetryUrl || row.kind === 'testing')
+  const cc = settled ? shortLived(300, 3600) : session.status === 'final' ? shortLived(10, 15, 0) : NO_STORE
   return json(c, meta, cc)
 })
 
@@ -189,10 +193,12 @@ admin.post('/ingest/:key', async (c) => {
   const row = await getSessionRow(c.env.DB, intParam(c.req.param('key'))!)
   if (!row) return c.json({ error: 'session not found' }, 404)
   // force: reset attempts and the queue claim
-  await c.env.DB.prepare(`UPDATE sessions SET ingest_state = 'pending', ingest_attempts = 0, telemetry_state = 'none' WHERE session_key = ?`)
+  await c.env.DB.prepare(
+    `UPDATE sessions SET ingest_state = 'pending', ingest_attempts = 0, queued_at = NULL, telemetry_state = 'none', telemetry_version = NULL WHERE session_key = ?`,
+  )
     .bind(row.session_key)
     .run()
-  const started = await requestIngestion(c.env, { ...row, ingest_state: 'pending' })
+  const started = await requestIngestion(c.env, { ...row, ingest_state: 'pending', ingest_attempts: 0, queued_at: null, telemetry_version: null })
   return c.json({ started })
 })
 admin.get('/status', async (c) => {

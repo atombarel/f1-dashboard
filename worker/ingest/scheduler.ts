@@ -1,5 +1,5 @@
 import { isQualiLike, isRaceLike } from '../../shared/sessions'
-import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, type SessionRow } from '../lib/db'
+import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, MAX_ATTEMPTS, type SessionRow } from '../lib/db'
 import type { Priority } from '../upstream/gate'
 import type { Upstream } from '../upstream/openf1'
 import { syncSeason } from './calendar'
@@ -94,6 +94,10 @@ export async function nightly(env: Env) {
     if (Date.now() - (await lastSync(env, `calendar:${y}`)) > 7 * DAY) await syncSeason(up, y)
     if (!(await kvGet(env.DB, `standings:${y}`))) await refreshStandings(up, y)
   }
+  // Sessions that exhausted their attempts get a fresh chance every few days (OpenF1 sometimes backfills late).
+  await env.DB.prepare(`UPDATE sessions SET ingest_attempts = 0 WHERE ingest_state = 'error' AND ingest_attempts >= ?1 AND updated_at < ?2`)
+    .bind(MAX_ATTEMPTS, new Date(Date.now() - 3 * DAY).toISOString())
+    .run()
   // Early December the next season's calendar is usually published.
   if (new Date().getUTCMonth() >= 10) await syncSeason(up, year + 1).catch(() => undefined)
   await refreshStandings(up, year)

@@ -414,6 +414,8 @@ export function buildBundle(
       }))
       .sort((a, b) => a.date.localeCompare(b.date)),
     weather: raw.weather
+      // the feed occasionally emits all-zero glitch samples
+      .filter((w) => !(w.air_temperature === 0 && w.humidity === 0))
       .map((w) => ({
         date: w.date,
         air: w.air_temperature,
