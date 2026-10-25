@@ -27,7 +27,10 @@ const JOLPICA_PATH: Partial<Record<SessionRow['kind'], string>> = {
  */
 export class IngestMeetingWorkflow extends WorkflowEntrypoint<Env, IngestMeetingParams> {
   async run(event: WorkflowEvent<IngestMeetingParams>, step: WorkflowStep) {
-    const { meetingKeys, sessionKeys, pass } = event.payload
+    const { sessionKeys, pass } = event.payload
+    // instances queued before multi-weekend batches carried a single meetingKey
+    const legacy = (event.payload as { meetingKey?: number }).meetingKey
+    const meetingKeys = event.payload.meetingKeys ?? (legacy ? [legacy] : [])
     const run = event.instanceId.replace(/[^a-z0-9-]/gi, '').slice(-24)
     const up: Upstream = { env: this.env, priority: 'low' }
 
