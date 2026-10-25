@@ -10,9 +10,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "cf-typegen": "wrangler types worker/worker-env.d.ts --env-interface Env --env-file .dev.vars.example",
-    "db:migrate:local": "wrangler d1 migrations apply f1-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply f1-db --remote",
-    "deploy": "vite build && wrangler d1 migrations apply f1-db --remote && wrangler deploy"
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "vite build && wrangler d1 migrations apply DB --remote && wrangler deploy"
   },
   "dependencies": {
     "@fontsource-variable/big-shoulders-display": "^5.3.0",

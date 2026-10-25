@@ -60,22 +60,19 @@ curl localhost:5173/api/sessions/11388   # la 1re visite d'une session terminée
 
 ## Déploiement
 
-Une seule fois :
+La base D1 (`f1-api-cache-db`, reprise de la v1) est déjà déclarée et la CI crée le bucket R2 si besoin. Une seule fois :
 
 ```bash
 npx wrangler login
-npx wrangler d1 create f1-db               # reporter l'id dans wrangler.jsonc
-npx wrangler r2 bucket create f1-bundles
-npx wrangler secret put ADMIN_TOKEN
+npx wrangler secret put ADMIN_TOKEN       # optionnel : sans lui les endpoints /api/admin restent fermés
 ```
 
 Ensuite chaque push sur `main` lance `.github/workflows/ci.yml` : typecheck, tests, build, migrations D1, déploiement.
 Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Workflows) et `CLOUDFLARE_ACCOUNT_ID`.
 
 Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` dans `wrangler.jsonc`, nécessaire aussi
-pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). Ce domaine est encore rattaché à l'ancien Worker
-`f1-api-cache-production` : le détacher (ou supprimer ce Worker) avant le premier déploiement. L'ancien projet Pages
-`f1-session-laps` peut ensuite être supprimé.
+pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
+`f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
 
 Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 sessions en parallèle max).
 

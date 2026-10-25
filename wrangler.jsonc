@@ -24,7 +24,8 @@
   },
 
   "d1_databases": [
-    { "binding": "DB", "database_name": "f1-db", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+    // Reuses the database of the previous version; the old cache tables are simply ignored.
+    { "binding": "DB", "database_name": "f1-api-cache-db", "database_id": "6987f960-070c-4d07-b6ed-1cbdf937e7f0", "migrations_dir": "migrations" }
   ],
   "r2_buckets": [{ "binding": "BUNDLES", "bucket_name": "f1-bundles" }],
 
