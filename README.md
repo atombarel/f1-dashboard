@@ -1,323 +1,97 @@
-# F1 Dashboard 🏎️
+# Pit/Wall — analyse F1 100 % Cloudflare
 
-A comprehensive Formula 1 data visualization dashboard built with React, featuring race analysis, lap time comparisons, tire strategies, and detailed session results powered by the OpenF1 API.
+Chaque session de F1 depuis 2023 : classement, temps au tour, course tour par tour, stratégies pneus,
+direction de course, météo, **télémétrie comparée** (vitesse, gaz, frein, rapport, delta, carte de domination
+par mini-secteur) et **replay** des courses.
 
-![F1 Dashboard](https://img.shields.io/badge/F1-Dashboard-red?style=for-the-badge&logo=formula1)
-![CI/CD](https://github.com/atombarel/f1-dashboard/actions/workflows/ci.yml/badge.svg)
-![Deployment](https://img.shields.io/badge/Deployed%20on-Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare)
-![React](https://img.shields.io/badge/React-19.1.0-61DAFB?style=for-the-badge&logo=react)
-![Vite](https://img.shields.io/badge/Vite-6.3.5-646CFF?style=for-the-badge&logo=vite)
-![TanStack Query](https://img.shields.io/badge/TanStack_Query-5.84.1-FF4154?style=for-the-badge)
+Un seul Worker Cloudflare sert le site (assets statiques) et l'API `/api/*`.
 
-## 🚀 Features
+## Architecture
 
-### 📊 Session Analysis
-- **Lap Time Visualization**: Interactive charts showing lap times with sector breakdowns
-- **Driver Performance Metrics**: Total laps, fastest/average/slowest times, consistency analysis
-- **Long Run Analysis**: Practice session stint analysis with 4+ lap runs
-- **Session Statistics**: Comprehensive session overview with fastest lap highlights
+```
+                         ┌────────────── Cloudflare ──────────────────────────────────────┐
+ visiteur ──► Worker ──► │ /api/*  Hono ─► Cache API (edge) ─► D1 (calendrier, états)       │
+     ▲          │        │                                 └─► R2 (bundles gzip immuables)  │
+     │          └─────── │ assets statiques (SPA, /assets/* immutable)                       │
+     │                   │                                                                  │
+     │                   │ Cron */10 min ─► Workflow « ingest session » (étapes + retries)  │
+     │                   │                      │                                           │
+     │                   │                      ▼                                           │
+     │                   │          Durable Object « UpstreamGate » (1 file globale,        │
+     │                   │          2 voies de priorité, ≤ 3 req/s, backoff sur 429)        │
+     │                   └──────────────────────┼───────────────────────────────────────────┘
+     │                                          ▼
+     └──── jamais d'appel direct ─────   OpenF1 · Jolpica-F1 · MultiViewer
+```
 
-### 🏁 Race-Specific Features
-- **Race Strategy Dashboard**: Visual tire strategy timeline showing compound changes throughout the race
-- **Race Events Timeline**: Chronological race control messages (safety cars, flags, penalties)
-- **Pit Stop Analysis**: Comprehensive pit stop statistics with fastest stop highlights
-- **Session Results**: Full session classification with proper F1 sorting
+**Pourquoi c'est fiable**
 
-### 🎯 Advanced Analytics
-- **Tire Strategy Analysis**: Color-coded tire compound visualization with pit stop markers
-- **Driver Comparison**: Multi-driver selection with team color coding
-- **Position Tracking**: Race finishing positions with DNF indicators
-- **Circuit Information**: Meeting names, locations, and session details
+- Les visiteurs ne touchent **jamais** les APIs externes : tout est servi depuis D1/R2.
+- Chaque session est ingérée **une fois** (~10 requêtes + 2 par pilote pour la télémétrie), 40 min après le
+  drapeau, puis une **2ᵉ passe** le lendemain pour les décisions des commissaires.
+- Le Workflow découpe l'ingestion en étapes rejouables : une erreur ne relance que la requête fautive.
+- Le Durable Object sérialise *toutes* les requêtes vers OpenF1 (limite 3 req/s, ~30/min), coalesce les doublons,
+  et fait passer ce qu'un visiteur attend avant le backfill.
+- Le classement officiel (Jolpica) est croisé avec OpenF1 : grille, statut d'abandon, points, et repli complet si
+  OpenF1 n'a pas encore le résultat.
 
-### 🎨 Modern UI/UX
-- **Dark/Light Mode**: Theme switching with system preference detection
-- **Responsive Design**: Works on all devices
-- **Interactive Charts**: Powered by Recharts with custom tooltips and legends
-- **Inline Styling**: Consistent theme system using inline styles with conditional dark mode
+**Pourquoi c'est rapide**
 
-## 🛠️ Technology Stack
+- Les bundles de session, la télémétrie et le replay sont stockés **gzippés** dans R2 et envoyés tels quels
+  (`encodeBody: 'manual'`), derrière des URLs versionnées par hash (`?v=…`) → `Cache-Control: immutable`.
+- La télémétrie est encodée en delta (≈ 45 % plus léger que du JSON brut).
+- Les endpoints issus de D1 sont mis en cache à l'edge (TTL court pendant un week-end de course, ETag/304).
+- SPA découpée par route et par onglet, préchargement au survol des liens.
 
-### Core Framework
-- **React 19.1.0**: Modern React with concurrent features
-- **Vite 6.3.5**: Lightning-fast build tool and dev server
-- **TanStack Query 5.84.1**: Powerful data fetching and caching
-
-### UI & Styling
-- **Inline Styles**: Custom inline styling system with theme support
-- **Radix UI**: Component primitives (configured but minimally used)
-- **Recharts 2.15.4**: React charting library for data visualization
-- **Lucide React**: Icon library
-- **Tailwind CSS**: Configured but not actively used in components
-
-### Data & API
-- **Axios 1.9.0**: HTTP client for API requests
-- **OpenF1 API**: Comprehensive F1 data source
-- **React Query**: Server state management with caching
-
-### Development Tools
-- **ESLint**: Code linting (configured, some violations present)
-- **Playwright**: Testing framework (configured, no test files implemented)
-- **PostCSS & Autoprefixer**: CSS processing (configured)
-
-## 🚦 Getting Started
-
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd f1-dashboard
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open your browser**
-   Navigate to `http://localhost:5173`
-
-### Available Scripts
+## Développement
 
 ```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
-npm run lint     # Run ESLint
-npm run deploy   # Deploy to Cloudflare Pages
+npm install
+cp .dev.vars.example .dev.vars       # ADMIN_TOKEN pour les endpoints /api/admin
+npm run db:migrate:local
+npm run dev                           # http://localhost:5173 — Worker, D1, R2, DO et Workflows en local
+
+# amorcer les données locales
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" localhost:5173/api/admin/sync/2026
+curl localhost:5173/api/sessions/11388   # la 1re visite d'une session terminée lance son ingestion
 ```
 
-## 📖 Usage Guide
+`npm test` (normalisation sur de vraies données du GP de Singapour 2026), `npm run typecheck`, `npm run build`.
 
-### 1. Session Selection
-1. **Choose Year**: Select from 2023-2025
-2. **Select Meeting**: Pick from race weekends (excludes testing)
-3. **Pick Session**: Practice 1-3, Qualifying, or Race
-4. **Choose Drivers**: Multi-select drivers for comparison
+## Déploiement
 
-### 2. Feature Overview
-
-#### Main Dashboard
-- **Lap Time Chart**: Interactive visualization with team colors
-- **Driver Details Card**: Performance metrics and tire strategy
-- **Session Statistics**: Overview of session data
-
-#### Practice Sessions
-- **Long Run Analysis**: Automatically appears for practice sessions
-- Shows stints with 4+ consecutive laps
-- Tire compound indicators with lap counts
-- Driver comparison grid with best long run averages
-
-#### Race Sessions
-- **Race Strategy Dashboard**: Visual tire strategy timeline
-- **Race Events Timeline**: Chronological race control messages
-- **Pit Stop Analysis**: Comprehensive pit stop statistics
-- **Session Results**: Full classification with circuit information
-
-### 3. Data Features
-- **Real-time Updates**: Data cached for 5 minutes with 10-minute stale time
-- **Outlier Filtering**: IQR method removes invalid lap times
-- **Team Colors**: Accurate F1 team color representation
-- **Tire Compounds**: Color-coded tire strategy visualization
-
-## 🏗️ Architecture
-
-### Project Structure
-```
-src/
-├── features/           # Feature-based modules
-│   ├── dashboard/      # Year/Meeting/Session selectors
-│   ├── drivers/        # Driver selection components
-│   ├── laps/          # Lap time visualization
-│   ├── analysis/      # Long run analysis (practice)
-│   ├── race/          # Race-specific features
-│   ├── results/       # Session results and standings
-│   └── shared/        # Reusable components
-├── constants/         # Configuration and constants
-├── services/          # API layer (f1Api.js)
-└── styles/           # Global styles
-```
-
-### Key Components
-
-#### Data Layer (`src/services/f1Api.js`)
-- Centralized API service with comprehensive endpoint coverage
-- Statistical outlier removal using IQR method (Q1-1.5*IQR to Q3+1.5*IQR)
-- Error handling with try/catch blocks
-- 15-second timeout configuration
-
-#### Feature Modules (All Functional)
-- **Dashboard**: Year, meeting, and session selectors
-- **Laps**: Lap time chart with Recharts, session statistics
-- **Race**: Strategy dashboard, events timeline, pit stop analysis
-- **Results**: Full session results with Q1/Q2/Q3 for qualifying
-- **Analysis**: Long run analysis for practice sessions (4+ lap stints)
-
-#### Shared Components
-- **DarkModeToggle**: Theme switching with system detection
-- **EventMultiSelect**: Multi-selection dropdown (minimally used)
-- **Formatters**: Utility functions for lap time, team colors, tire colors
-
-## 📊 Data Sources & API
-
-### OpenF1 API Endpoints
-```javascript
-// Core session data
-GET /meetings?year={year}           // Race weekends and circuit info
-GET /sessions?meeting_key={key}     // All sessions for a meeting
-GET /drivers?session_key={key}      // Participating drivers
-GET /laps?session_key={key}         // Lap times and sector data
-GET /stints?session_key={key}       // Tire strategy data
-
-// Race-specific data
-GET /race_control?session_key={key} // Race control messages
-GET /pit?session_key={key}          // Pit stop data
-GET /position?session_key={key}     // Position tracking
-GET /intervals?session_key={key}    // Time gaps
-GET /session_result?session_key={key} // Final results
-GET /starting_grid?session_key={key}  // Grid positions
-```
-
-### Data Processing
-- **Lap Time Filtering**: Removes outliers using IQR method (Q1-1.5*IQR to Q3+1.5*IQR)
-- **Long Run Detection**: Filters stints with 4+ consecutive laps
-- **Results Classification**: Proper F1 sorting (Finishers → Lapped → DNF)
-- **Team Color Mapping**: Accurate team color representation
-
-## 🎨 Design System
-
-### Color Scheme
-```javascript
-// Theme Colors
-F1_RED: '#e10600'
-DARK_BACKGROUNDS: ['#0a0a0a', '#1a1a1a', '#2a2a2a']
-LIGHT_BACKGROUNDS: ['#ffffff', '#f5f5f5', '#f8f8f8']
-
-// Tire Compound Colors
-SOFT: '#dc2626'      // Red
-MEDIUM: '#f59e0b'    // Amber/Orange
-HARD: '#6b7280'      // Gray
-INTERMEDIATE: '#10b981' // Green
-WET: '#3b82f6'       // Blue
-```
-
-### Component Styling
-- **100% Inline Styles**: All components use inline styles exclusively
-- **Theme System**: Centralized theme colors with dark/light mode support
-- **No Tailwind Usage**: Despite configuration, no Tailwind classes are used
-- **Team Colors**: Dynamic color application using getTeamColor() function
-- **Consistent Pattern**: All styles use style prop with conditional logic
-
-## 🔧 Configuration
-
-### Environment Setup
-- **Vite Config**: React plugin with path alias `@` for `./src`
-- **ESLint**: React hooks and refresh plugins
-- **Server Config**: Allows Docker container connections (`host.docker.internal`)
-
-### Development Notes
-- **React Query**: All data fetching uses React Query hooks
-- **Session Detection**: Conditional rendering based on session type
-- **Chart Performance**: Performance optimizations with dot={false} and isAnimationActive={false}
-- **Known Issues**: Some ESLint violations (hook order, unused variables)
-- **URL State**: Implemented for shareable links via URLSearchParams
-
-## 🧪 Testing
-
-### Testing Configuration
-Playwright is configured in the project but no test files are currently implemented.
+La base D1 (`f1-api-cache-db`, reprise de la v1) est déjà déclarée et la CI crée le bucket R2 si besoin. Une seule fois :
 
 ```bash
-npx playwright test    # Will run tests once implemented
+npx wrangler login
+npx wrangler secret put ADMIN_TOKEN       # optionnel : sans lui les endpoints /api/admin restent fermés
 ```
 
-### Recommended Test Scenarios
-When implementing tests, consider:
-- Session navigation (Practice → Qualifying → Race)
-- Driver selection and data visualization
-- Dark/light mode switching
-- Responsive behavior
-- Race-specific feature visibility
+Ensuite chaque push sur `main` lance `.github/workflows/ci.yml` : typecheck, tests, build, migrations D1, déploiement.
+Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Workflows) et `CLOUDFLARE_ACCOUNT_ID`.
 
-## 🚀 Performance Optimizations
+Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` dans `wrangler.jsonc`, nécessaire aussi
+pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
+`f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
 
-### Data Management
-- **React Query Caching**: 5-minute stale time, 10-minute cache
-- **Data Filtering**: Client-side outlier removal reduces chart noise
-- **Lazy Loading**: Components load data only when needed
+Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 sessions en parallèle max).
 
-### Rendering Optimizations
-- **Feature Detection**: Session-specific components only render when appropriate
-- **Efficient Re-renders**: Strategic state management
-- **Chart Optimization**: Limited data points for smooth rendering
+## API
 
-## 🔍 Known Limitations & Issues
+| Endpoint | Cache |
+|---|---|
+| `GET /api/home` | 30 s en week-end de course, sinon 5 min |
+| `GET /api/seasons/:year` · `/api/meetings/:key` | idem |
+| `GET /api/sessions/:key` → pointeurs versionnés | court |
+| `GET /api/sessions/:key/bundle?v=` | immutable |
+| `GET /api/sessions/:key/telemetry/:driver?v=` | immutable |
+| `GET /api/sessions/:key/replay?v=` | immutable |
+| `GET /api/circuits/:circuit/:year` | 1 jour |
+| `GET /api/standings/:year` | 5 min (saison en cours) |
+| `POST /api/admin/{sync/:year, ingest/:key, standings/:year, tick}` · `GET /api/admin/status` | `Bearer ADMIN_TOKEN` |
 
-### API Constraints
-- **Position Data**: OpenF1 doesn't provide complete lap-by-lap position data
-- **Sprint Race Exclusion**: Race features exclude sprint races to avoid duplication
-- **Data Availability**: Some sessions may have limited stint or race control data
+## Sources
 
-### Technical Limitations
-- **Long Run Analysis**: Requires 4+ lap stints, may be limited in short practice sessions
-- **Chart Performance**: May slow with very long sessions (70+ laps)
-- **Inline Styles**: Verbose styling approach makes components harder to maintain
-
-### Code Quality Issues
-- **ESLint Violations**: Hook order issues in QualifyingChart.jsx
-- **Unused Variables**: Present in some race strategy components
-- **No Tests**: Testing framework configured but no tests implemented
-- **No Error Boundaries**: Missing comprehensive error handling
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Follow the existing code style and architecture
-4. Add tests for new features
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-### Development Guidelines
-- Follow existing feature-based architecture
-- Use React Query for all API calls (no direct axios)
-- Maintain inline styling pattern (all styles via style prop)
-- Use theme constants from THEME_COLORS
-- Fix ESLint violations before committing
-- Test manually across different session types (no automated tests yet)
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **[OpenF1 API](https://openf1.org/)**: Comprehensive F1 data source
-- **Formula 1**: The incredible sport that makes this possible
-- **React Community**: Amazing tools and ecosystem
-- **TanStack Query**: Powerful data fetching solution
-- **Tailwind CSS**: Utility-first CSS framework
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-1. Check the [Issues](../../issues) page
-2. Review the CLAUDE.md file for development guidance
-3. Create a new issue with detailed information
-4. Include session data and browser information for bugs
-
----
-
-**Built with ❤️ for Formula 1 fans and data enthusiasts**
-
-*Experience the thrill of F1 data like never before - from practice long runs to race day strategies, dive deep into the world of Formula 1 analytics.*
+[OpenF1](https://openf1.org) (tours, pneus, télémétrie, positions…), [Jolpica-F1](https://github.com/jolpica/jolpica-f1)
+(classements officiels, championnats), [MultiViewer](https://multiviewer.app) (tracés des circuits).
+Projet non officiel, sans lien avec Formula One Management.
