@@ -1,6 +1,5 @@
 import { isQualiLike, isRaceLike } from '../../shared/sessions'
-import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, MAX_ATTEMPTS, type SessionRow } from '../lib/db'
-import type { Priority } from '../upstream/gate'
+import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, MAX_ATTEMPTS, telemetryCandidates, type SessionRow } from '../lib/db'
 import type { Upstream } from '../upstream/openf1'
 import { syncSeason } from './calendar'
 import { refreshStandings } from './standings'
@@ -9,7 +8,9 @@ import type { IngestParams } from './workflow'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 /** Concurrent background workflows. User-triggered ones bypass this. */
-const MAX_BACKGROUND = 3
+const MAX_BACKGROUND = 4
+/** Telemetry runs are ~45 requests each: keep them from starving the base backfill. */
+const MAX_TELEMETRY = 2
 
 const currentYear = () => new Date().getUTCFullYear()
 
@@ -69,20 +70,34 @@ export async function tick(env: Env) {
     }
   }
 
-  // Ingestion
-  const queued = await countQueued(env.DB)
-  const slots = MAX_BACKGROUND - queued
+  await pump(env)
+}
+
+/**
+ * Fill the background slots: first the base data of every finished session (cheap, makes the
+ * site useful), then telemetry for the sessions where it matters most. Called by the cron and by
+ * every background workflow when it finishes, so the backfill runs at the speed of the upstream
+ * gate rather than at the cron cadence.
+ */
+export async function pump(env: Env) {
+  let slots = MAX_BACKGROUND - (await countQueued(env.DB))
   if (slots <= 0) return
   for (const row of await ingestCandidates(env.DB, slots)) {
     if (!(await claimSession(env.DB, row.session_key))) continue
+    slots--
     const fresh = Date.now() - Date.parse(row.date_end) < 2 * DAY
-    const priority: Priority = fresh ? 'high' : 'low'
     await startWorkflow(env, {
       sessionKey: row.session_key,
       pass: row.next_pass === 2 ? 2 : 1,
-      telemetry: !row.telemetry_version && wantsTelemetry(row, true),
-      priority,
+      // fresh sessions get everything right away; the backlog gets telemetry in a second phase
+      telemetry: fresh && !row.telemetry_version && wantsTelemetry(row, true),
+      priority: fresh ? 'high' : 'low',
     })
+  }
+  if (slots <= 0 || (await ingestCandidates(env.DB, 1)).length) return
+  for (const row of await telemetryCandidates(env.DB, Math.min(slots, MAX_TELEMETRY))) {
+    if (!(await claimTelemetry(env.DB, row.session_key))) continue
+    await startWorkflow(env, { sessionKey: row.session_key, pass: row.ingest_pass === 2 ? 2 : 1, telemetry: true, telemetryOnly: true, priority: 'low' })
   }
 }
 

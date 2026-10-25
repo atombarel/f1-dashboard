@@ -44,6 +44,8 @@ export class UpstreamGate extends DurableObject<Env> {
   private pausedUntil = 0
   private sent: number[] = []
   private inflight = new Map<string, Promise<GateResult>>()
+  /** outcome timestamps over the last hour, for /api/admin/status */
+  private stats = { ok: [] as number[], throttled: [] as number[], failed: [] as number[] }
 
   async fetchText(url: string, limits: GateLimits, priority: Priority = 'low'): Promise<GateResult> {
     const existing = this.inflight.get(url)
@@ -57,7 +59,22 @@ export class UpstreamGate extends DurableObject<Env> {
   }
 
   async queueDepth() {
-    return { high: this.high.length, low: this.low.length, inflight: this.inflight.size }
+    const hourAgo = Date.now() - 60 * 60 * 1000
+    const count = (a: number[]) => a.filter((t) => t > hourAgo).length
+    return {
+      high: this.high.length,
+      low: this.low.length,
+      inflight: this.inflight.size,
+      pausedForMs: Math.max(0, this.pausedUntil - Date.now()),
+      lastHour: { ok: count(this.stats.ok), throttled: count(this.stats.throttled), failed: count(this.stats.failed) },
+    }
+  }
+
+  private record(kind: keyof UpstreamGate['stats']) {
+    const now = Date.now()
+    const list = this.stats[kind]
+    list.push(now)
+    while (list.length && list[0] < now - 60 * 60 * 1000) list.shift()
   }
 
   private nextAllowedAt(limits: GateLimits): number {
@@ -105,13 +122,16 @@ export class UpstreamGate extends DurableObject<Env> {
         await res.body?.cancel()
         // Throttled: hold back everybody, not just this job.
         if (res.status === 429) this.pausedUntil = Math.max(this.pausedUntil, Date.now() + retryIn)
+        this.record(res.status === 429 ? 'throttled' : 'failed')
       } else {
         job.resolve({ status: res.status, body: await res.text() })
+        this.record('ok')
         return
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err)
       retryIn = 1000 * 2 ** job.attempt
+      this.record('failed')
     }
     if (job.attempt >= MAX_ATTEMPTS) {
       job.reject(new Error(`Upstream failed after ${job.attempt} attempts (${error}): ${job.url}`))

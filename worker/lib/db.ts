@@ -198,7 +198,7 @@ export async function claimSession(db: D1Database, key: number, staleAfterMs = 3
   return res.meta.changes > 0
 }
 
-export async function claimTelemetry(db: D1Database, key: number, staleAfterMs = 45 * 60 * 1000): Promise<boolean> {
+export async function claimTelemetry(db: D1Database, key: number, staleAfterMs = 2 * 60 * 60 * 1000): Promise<boolean> {
   const staleBefore = new Date(Date.now() - staleAfterMs).toISOString()
   const res = await db
     .prepare(
@@ -259,12 +259,29 @@ export async function ingestCandidates(db: D1Database, limit: number, at = Date.
 
 export async function countQueued(db: D1Database): Promise<number> {
   const staleQueue = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  // a telemetry run can take a while when the upstream throttles: give it more time before calling it stale
+  const staleTelemetry = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   const row = await db
     .prepare(`SELECT COUNT(*) AS n FROM sessions
-       WHERE (ingest_state = 'queued' AND queued_at >= ?1) OR (telemetry_state = 'queued' AND updated_at >= ?1)`)
-    .bind(staleQueue)
+       WHERE (ingest_state = 'queued' AND queued_at >= ?1) OR (telemetry_state = 'queued' AND updated_at >= ?2)`)
+    .bind(staleQueue, staleTelemetry)
     .first<{ n: number }>()
   return row?.n ?? 0
+}
+
+/** Ingested sessions still missing telemetry, most interesting first (races, then qualifying), newest first. */
+export async function telemetryCandidates(db: D1Database, limit: number): Promise<SessionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM sessions
+       WHERE version IS NOT NULL AND telemetry_version IS NULL AND telemetry_state IN ('none', 'error') AND kind != 'testing'
+       ORDER BY CASE kind WHEN 'race' THEN 0 WHEN 'qualifying' THEN 1 WHEN 'sprint' THEN 2 WHEN 'sprint_qualifying' THEN 3 ELSE 4 END,
+                date_end DESC
+       LIMIT ?1`,
+    )
+    .bind(limit)
+    .all<SessionRow>()
+  return results
 }
 
 export async function kvGet(db: D1Database, key: string): Promise<{ value: string; updated_at: string } | null> {

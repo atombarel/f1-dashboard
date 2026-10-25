@@ -25,6 +25,7 @@ import {
   type Upstream,
 } from '../upstream/openf1'
 import { buildBundle, podiumOf, type RawSessionData } from './bundle'
+import { pump } from './scheduler'
 import { refreshStandings } from './standings'
 import { assembleReplay, buildDriverTelemetry, compactLocation, resampleTrack, type CompactTrack } from './telemetry'
 
@@ -132,6 +133,14 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
       return true
     })
 
+    if (priority === 'low') {
+      // background job done: start the next one right away instead of waiting for the cron
+      await step.do('continue backfill', async () => {
+        await pump(this.env)
+        return true
+      })
+    }
+
     return { sessionKey, version }
   }
 
@@ -215,6 +224,8 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
       const drivers = Object.entries(bundle.laps)
         .filter(([, laps]) => laps.some((l) => l.t !== null))
         .map(([d]) => Number(d))
+      // counted as a running job by the scheduler while the ~45 requests go through
+      await markTelemetry(this.env.DB, session.session_key, 'queued', null)
       // Telemetry is immutable once the session is over: version it independently from the bundle.
       return { drivers, telemetryVersion: `t${run.slice(-10)}` }
     })
