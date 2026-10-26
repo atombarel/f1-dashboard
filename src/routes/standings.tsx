@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { EmptyState, ErrorState, PageHeader, Panel, SectionTitle, Segmented, Skeleton, StartLights } from '@/components/ui'
 import { YearSwitcher } from '@/features/home/YearSwitcher'
 import { ProgressionChart, type Series } from '@/features/standings/ProgressionChart'
+import { t } from '@/i18n'
 import { seasonQuery, standingsQuery } from '@/lib/api'
 import { onDark } from '@/lib/colors'
 import { points } from '@/lib/format'
@@ -23,22 +24,22 @@ export function StandingsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={<span>Championnat du monde</span>}
+        eyebrow={<span>{t('standings.worldChampionship')}</span>}
         title={
           <>
-            Classements <span className="text-signal">{year}</span>
+            {t('nav.standings')} <span className="text-signal">{year}</span>
           </>
         }
         aside={<YearSwitcher years={years} current={year} to="/classements/$year" />}
       >
-        {q.data && <span className="tnum">Après la manche {q.data.round} · source officielle Jolpica-F1</span>}
+        {q.data && <span className="tnum">{t('standings.afterRound', { n: q.data.round })}</span>}
       </PageHeader>
 
       {q.isPending ? (
-        <StartLights label="Calcul du classement" />
+        <StartLights label={t('standings.calculating')} />
       ) : q.isError ? (
         q.error instanceof Error && 'status' in q.error && q.error.status === 404 ? (
-          <EmptyState title="Classement indisponible">Aucun résultat officiel pour la saison {year} pour l’instant.</EmptyState>
+          <EmptyState title={t('standings.unavailableTitle')}>{t('standings.unavailableBody', { year })}</EmptyState>
         ) : (
           <ErrorState error={q.error} retry={() => q.refetch()} />
         )
@@ -47,8 +48,8 @@ export function StandingsPage() {
           <div className="mb-6 flex items-center justify-between gap-4">
             <Segmented<View>
               items={[
-                { value: 'drivers', label: 'Pilotes' },
-                { value: 'teams', label: 'Constructeurs' },
+                { value: 'drivers', label: t('standings.drivers') },
+                { value: 'teams', label: t('standings.teams') },
               ]}
               value={view}
               onChange={(v) => {
@@ -60,7 +61,7 @@ export function StandingsPage() {
           </div>
           <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <section className="min-w-0">
-              <SectionTitle index="01" title={view === 'drivers' ? 'Pilotes' : 'Constructeurs'} />
+              <SectionTitle index="01" title={view === 'drivers' ? t('standings.drivers') : t('standings.teams')} />
               {view === 'drivers' ? (
                 <DriverTable rows={q.data.drivers} highlight={highlight} onHighlight={setHighlight} />
               ) : (
@@ -68,7 +69,7 @@ export function StandingsPage() {
               )}
             </section>
             <section className="min-w-0 self-start xl:sticky xl:top-20">
-              <SectionTitle index="02" title="Évolution" aside={<span>Points cumulés · survole une ligne</span>} />
+              <SectionTitle index="02" title={t('standings.progression')} aside={<span>{t('standings.progressionHint')}</span>} />
               <Panel className="p-4 pr-2">
                 <Progression standings={q.data} view={view} highlight={highlight} onHighlight={setHighlight} />
               </Panel>
@@ -87,9 +88,9 @@ function Leader({ standings, view }: { standings: StandingsResponse; view: View 
   const nameB = b ? ('code' in b ? b.code : b.name) : ''
   return (
     <div className="hidden text-right sm:block">
-      <div className="eyebrow">Avance du leader</div>
+      <div className="eyebrow">{t('standings.leaderMargin')}</div>
       <div className="tnum text-sm">
-        <span style={{ color: onDark(a.teamColour) }}>{name}</span> {b && <>+{points(a.points - b.points)} sur {nameB}</>}
+        <span style={{ color: onDark(a.teamColour) }}>{name}</span> {b && t('standings.ahead', { pts: points(a.points - b.points), name: nameB })}
       </div>
     </div>
   )
@@ -134,12 +135,12 @@ function DriverTable({ rows, highlight, onHighlight }: { rows: StandingDriver[];
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="eyebrow border-b border-line-2 text-left">
-            <th className="w-10 py-2 font-normal">Pos</th>
-            <th className="py-2 font-normal">Pilote</th>
-            <th className="hidden py-2 font-normal md:table-cell">Équipe</th>
-            <th className="hidden py-2 text-right font-normal sm:table-cell">Vict.</th>
-            <th className="py-2 pr-3 text-right font-normal">Points</th>
-            <th className="hidden py-2 text-right font-normal sm:table-cell">Écart</th>
+            <th className="w-10 py-2 font-normal">{t('standings.cols.pos')}</th>
+            <th className="py-2 font-normal">{t('standings.cols.driver')}</th>
+            <th className="hidden py-2 font-normal md:table-cell">{t('standings.cols.team')}</th>
+            <th className="hidden py-2 text-right font-normal sm:table-cell">{t('standings.cols.wins')}</th>
+            <th className="py-2 pr-3 text-right font-normal">{t('standings.cols.points')}</th>
+            <th className="hidden py-2 text-right font-normal sm:table-cell">{t('standings.cols.gap')}</th>
           </tr>
         </thead>
         <tbody>
@@ -193,11 +194,11 @@ function TeamTable({ rows, highlight, onHighlight }: { rows: StandingTeam[]; hig
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="eyebrow border-b border-line-2 text-left">
-            <th className="w-10 py-2 font-normal">Pos</th>
-            <th className="py-2 font-normal">Équipe</th>
-            <th className="hidden py-2 text-right font-normal sm:table-cell">Vict.</th>
-            <th className="py-2 pr-3 text-right font-normal">Points</th>
-            <th className="hidden py-2 text-right font-normal sm:table-cell">Écart</th>
+            <th className="w-10 py-2 font-normal">{t('standings.cols.pos')}</th>
+            <th className="py-2 font-normal">{t('standings.cols.team')}</th>
+            <th className="hidden py-2 text-right font-normal sm:table-cell">{t('standings.cols.wins')}</th>
+            <th className="py-2 pr-3 text-right font-normal">{t('standings.cols.points')}</th>
+            <th className="hidden py-2 text-right font-normal sm:table-cell">{t('standings.cols.gap')}</th>
           </tr>
         </thead>
         <tbody>

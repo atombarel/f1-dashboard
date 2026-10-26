@@ -1,10 +1,11 @@
 import type { Compound, LapRow, Neutralization, SessionBundle, Stint } from '@shared/types'
 import type { ScaleLinear } from 'd3-scale'
+import { t } from '@/i18n'
 
 export const NEUTRAL_STYLE: Record<Neutralization['type'], { fill: string; label: string; text: string }> = {
-  SC: { fill: 'var(--color-amber)', label: 'Safety car', text: 'SC' },
-  VSC: { fill: 'var(--color-yellow)', label: 'Virtual safety car', text: 'VSC' },
-  RED: { fill: 'var(--color-signal)', label: 'Drapeau rouge', text: 'RED' },
+  SC: { fill: 'var(--color-amber)', get label() { return t('sessionHelpers.neutral.SC') }, text: 'SC' },
+  VSC: { fill: 'var(--color-yellow)', get label() { return t('sessionHelpers.neutral.VSC') }, text: 'VSC' },
+  RED: { fill: 'var(--color-signal)', get label() { return t('sessionHelpers.neutral.RED') }, text: 'RED' },
 }
 
 /** Shaded lap bands for SC / VSC / red flag periods. `x` maps a lap number to a pixel. */

@@ -1,9 +1,10 @@
-import { SESSION_SHORT } from '@shared/sessions'
 import type { MeetingSummary, PodiumEntry, SessionSummary } from '@shared/types'
 import { Link } from '@tanstack/react-router'
 import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { StatusPill } from '@/components/ui'
+import { t } from '@/i18n'
+import { sessionName, sessionShort } from '@/i18n/helpers'
 import { onDark } from '@/lib/colors'
 import { clock, dayDate, localClock } from '@/lib/format'
 
@@ -18,7 +19,7 @@ export function useNow(interval = 1000) {
 }
 
 export const shortName = (name: string) => name.replace('Grand Prix', 'GP')
-export const sessionShort = (name: string) => SESSION_SHORT[name] ?? name
+export { sessionShort }
 
 export function PodiumChips({ podium, className }: { podium: PodiumEntry[] | null; className?: string }) {
   if (!podium?.length) return null
@@ -57,14 +58,14 @@ export function SessionCard({ session, meeting, highlight, index }: { session: S
       <div>
         <div className="text-xs capitalize text-muted">{dayDate(session.dateStart)}</div>
         <div className="tnum mt-0.5 text-lg text-paper">{clock(session.dateStart)}</div>
-        <div className="tnum text-[10px] text-dim">{localClock(session.dateStart, meeting.gmtOffset)} sur place</div>
+        <div className="tnum text-[10px] text-dim">{t('homeShared.atTrack', { time: localClock(session.dateStart, meeting.gmtOffset) })}</div>
       </div>
       {session.podium?.length ? (
         <PodiumChips podium={session.podium} />
       ) : session.status === 'processing' ? (
-        <div className="font-mono text-[10px] uppercase tracking-wider text-amber">Données en cours de récupération</div>
+        <div className="font-mono text-[10px] uppercase tracking-wider text-amber">{t('homeShared.fetching')}</div>
       ) : (
-        <div className="font-mono text-[10px] uppercase tracking-wider text-dim">{session.name}</div>
+        <div className="font-mono text-[10px] uppercase tracking-wider text-dim">{sessionName(session.name)}</div>
       )}
       <span className="absolute right-3 bottom-3 font-mono text-xs text-dim transition-all group-hover:translate-x-0.5 group-hover:text-signal">→</span>
     </Link>

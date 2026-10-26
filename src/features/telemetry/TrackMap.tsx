@@ -1,6 +1,7 @@
 import type { CircuitLayout } from '@shared/types'
 import { useMemo } from 'react'
 import { useWidth } from '@/charts/core'
+import { t } from '@/i18n'
 import { interp, makeProjection, type MiniSector, type PreparedLap } from './math'
 
 export interface MapDriver {
@@ -86,7 +87,7 @@ export function TrackMap({
   return (
     <div ref={ref} className="relative w-full">
       {geo && (
-        <svg width={width} height={geo.height} className="block" role="img" aria-label="Carte du circuit, domination par mini-secteur">
+        <svg width={width} height={geo.height} className="block" role="img" aria-label={t('telemetry.mapAria')}>
           <defs>
             <filter id="tm-glow" x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="3" />

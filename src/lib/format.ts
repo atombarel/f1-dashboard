@@ -1,3 +1,5 @@
+import { getLocale, t } from '@/i18n'
+
 const pad = (n: number, w = 2) => String(n).padStart(w, '0')
 
 /** 92.456 → "1:32.456" */
@@ -19,30 +21,38 @@ export function raceTime(s: number | null | undefined): string {
 
 export function gap(g: number | string | null | undefined, digits = 3): string {
   if (g === null || g === undefined) return '—'
-  if (typeof g === 'string') return g.replace('LAPS', 'TOURS').replace('LAP', 'TOUR')
-  if (g === 0) return 'Leader'
+  if (typeof g === 'string') return g.replace('LAPS', t('format.laps')).replace('LAP', t('format.lap'))
+  if (g === 0) return t('format.leader')
   return `+${g.toFixed(digits)}`
 }
 
 export const delta = (d: number, digits = 3) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d).toFixed(digits)}`
 
-const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' })
-const dayFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
-const timeFmt = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
-const longFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+const formatters = new Map<string, Intl.DateTimeFormat>()
+/** Formatter for the current language, built once per (locale, options). */
+function fmt(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const locale = getLocale()
+  const id = locale + JSON.stringify(options)
+  let f = formatters.get(id)
+  if (!f) formatters.set(id, (f = new Intl.DateTimeFormat(locale, options)))
+  return f
+}
+const DATE = { day: 'numeric', month: 'short' } as const
+const DAY = { weekday: 'short', day: 'numeric', month: 'short' } as const
+const TIME = { hour: '2-digit', minute: '2-digit' } as const
+const LONG = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' } as const
 
-export const shortDate = (iso: string) => dateFmt.format(new Date(iso))
-export const dayDate = (iso: string) => dayFmt.format(new Date(iso))
-export const clock = (iso: string) => timeFmt.format(new Date(iso))
-export const longDate = (iso: string) => longFmt.format(new Date(iso))
+export const shortDate = (iso: string) => fmt(DATE).format(new Date(iso))
+export const dayDate = (iso: string) => fmt(DAY).format(new Date(iso))
+export const clock = (iso: string) => fmt(TIME).format(new Date(iso))
+export const longDate = (iso: string) => fmt(LONG).format(new Date(iso))
 
-/** "6–8 mars" */
+/** "6–8 mars" / "6–8 Mar" */
 export function dateRange(startIso: string, endIso: string): string {
   const s = new Date(startIso)
   const e = new Date(endIso)
-  const month = new Intl.DateTimeFormat('fr-FR', { month: 'short' })
-  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${month.format(e)}`
-  return `${dateFmt.format(s)} – ${dateFmt.format(e)}`
+  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${fmt({ month: 'short' }).format(e)}`
+  return `${fmt(DATE).format(s)} – ${fmt(DATE).format(e)}`
 }
 
 /** Circuit-local clock from the meeting's gmt offset ("08:00:00"). */

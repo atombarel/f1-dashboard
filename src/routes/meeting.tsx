@@ -4,11 +4,13 @@ import { Link, useParams } from '@tanstack/react-router'
 import clsx from 'clsx'
 import { ErrorState, Flag, PageHeader, Panel, SectionTitle, StartLights, Stat, StatusPill } from '@/components/ui'
 import { PodiumChips, sessionShort, shortName } from '@/features/home/shared'
+import { getLocale, t } from '@/i18n'
+import { sessionName } from '@/i18n/helpers'
 import { meetingQuery } from '@/lib/api'
 import { onDark } from '@/lib/colors'
 import { clock, dateRange, localClock } from '@/lib/format'
 
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString(getLocale(), { weekday: 'long', day: 'numeric', month: 'long' })
 
 export function MeetingPage() {
   const { meetingKey } = useParams({ from: '/gp/$meetingKey' })
@@ -31,11 +33,11 @@ export function MeetingPage() {
         eyebrow={
           <>
             <Link to="/saison/$year" params={{ year: m.year }} className="link-underline hover:text-paper">
-              Saison {m.year}
+              {t('season.label', { year: m.year })}
             </Link>
             <span className="text-dim">/</span>
-            <span>{m.round ? `Manche ${m.round}` : m.isTesting ? 'Essais' : 'Hors championnat'}</span>
-            {m.isCancelled && <span className="ml-2 text-signal">Annulé</span>}
+            <span>{m.round ? t('season.round', { n: m.round }) : m.isTesting ? t('season.testing') : t('season.nonChampionship')}</span>
+            {m.isCancelled && <span className="ml-2 text-signal">{t('season.cancelled')}</span>}
           </>
         }
         title={
@@ -50,10 +52,10 @@ export function MeetingPage() {
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0">
-          <SectionTitle index="01" title="Programme" aside={<span>Heures affichées dans ton fuseau · heure du circuit en gris</span>} />
+          <SectionTitle index="01" title={t('meeting.schedule')} aside={<span>{t('meeting.timesNote')}</span>} />
           {processing && (
             <div className="mb-4 flex items-center gap-2 border border-amber/30 bg-amber/5 px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-amber">
-              <span className="animate-pulse-dot size-1.5 rounded-full bg-amber" /> Données en cours de récupération pour certaines sessions
+              <span className="animate-pulse-dot size-1.5 rounded-full bg-amber" /> {t('meeting.processing')}
             </div>
           )}
           <ol className="relative space-y-8 border-l border-line pl-6">
@@ -74,20 +76,20 @@ export function MeetingPage() {
         <aside className="space-y-6">
           <Panel className="p-6">
             {m.circuitImage ? (
-              <img src={m.circuitImage} alt={`Tracé — ${m.circuitName}`} onError={(e) => (e.currentTarget.style.display = 'none')} className="mx-auto w-full max-w-[320px] drop-shadow-[0_0_24px_rgba(255,59,47,0.2)]" />
+              <img src={m.circuitImage} alt={t('meeting.circuitAlt', { circuit: m.circuitName })} onError={(e) => (e.currentTarget.style.display = 'none')} className="mx-auto w-full max-w-[320px] drop-shadow-[0_0_24px_rgba(255,59,47,0.2)]" />
             ) : (
-              <div className="py-16 text-center text-sm text-dim">Tracé indisponible</div>
+              <div className="py-16 text-center text-sm text-dim">{t('meeting.trackUnavailable')}</div>
             )}
             <div className="mt-6 grid grid-cols-2 gap-5 border-t border-line pt-5">
-              <Stat label="Circuit" value={<span className="font-sans text-base">{m.circuitName}</span>} sub={m.location} />
-              <Stat label="Pays" value={<span className="font-sans text-base">{m.countryName}</span>} sub={`UTC${m.gmtOffset.startsWith('-') ? '' : '+'}${m.gmtOffset.slice(0, 5)}`} />
-              <Stat label="Dates" value={<span className="font-sans text-base">{dateRange(m.dateStart, m.dateEnd)}</span>} sub={String(m.year)} />
-              <Stat label="Sessions" value={m.sessions.length} sub={m.sessions.some((s) => s.kind === 'sprint') ? 'Format sprint' : 'Format classique'} />
+              <Stat label={t('meeting.circuit')} value={<span className="font-sans text-base">{m.circuitName}</span>} sub={m.location} />
+              <Stat label={t('meeting.country')} value={<span className="font-sans text-base">{m.countryName}</span>} sub={`UTC${m.gmtOffset.startsWith('-') ? '' : '+'}${m.gmtOffset.slice(0, 5)}`} />
+              <Stat label={t('meeting.dates')} value={<span className="font-sans text-base">{dateRange(m.dateStart, m.dateEnd)}</span>} sub={String(m.year)} />
+              <Stat label={t('meeting.sessions')} value={m.sessions.length} sub={m.sessions.some((s) => s.kind === 'sprint') ? t('meeting.sprintFormat') : t('meeting.classicFormat')} />
             </div>
           </Panel>
           {winner && race && (
             <Link to="/session/$sessionKey" params={{ sessionKey: race.key }} className="panel group block p-6">
-              <div className="eyebrow mb-3">Vainqueur</div>
+              <div className="eyebrow mb-3">{t('season.winner')}</div>
               <div className="flex items-center gap-3">
                 <span className="h-12 w-1.5" style={{ background: onDark(winner.teamColour) }} />
                 <div>
@@ -98,7 +100,7 @@ export function MeetingPage() {
                 </div>
               </div>
               <PodiumChips podium={race.podium} className="mt-4" />
-              <div className="mt-4 font-mono text-[11px] uppercase tracking-wider text-muted group-hover:text-signal">Analyse de la course →</div>
+              <div className="mt-4 font-mono text-[11px] uppercase tracking-wider text-muted group-hover:text-signal">{t('meeting.raceAnalysis')}</div>
             </Link>
           )}
         </aside>
@@ -124,11 +126,11 @@ function SessionRow({ session: s, gmtOffset }: { session: SessionSummary; gmtOff
         <span className="font-mono text-xs text-dim transition-all group-hover:translate-x-0.5 group-hover:text-signal">→</span>
       </div>
       <div className="order-3 col-span-2 min-w-0 sm:order-2 sm:col-span-1">
-        <div className="truncate text-sm text-paper">{s.name}</div>
+        <div className="truncate text-sm text-paper">{sessionName(s.name)}</div>
         <div className="tnum mt-0.5 whitespace-nowrap text-xs text-muted">
-          {clock(s.dateStart)} – {clock(s.dateEnd)} <span className="text-dim">· {localClock(s.dateStart, gmtOffset)} sur place</span>
+          {clock(s.dateStart)} – {clock(s.dateEnd)} <span className="text-dim">· {t('homeShared.atTrack', { time: localClock(s.dateStart, gmtOffset) })}</span>
         </div>
-        {s.status === 'processing' && <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-amber">Données en cours de récupération</div>}
+        {s.status === 'processing' && <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-amber">{t('homeShared.fetching')}</div>}
         <PodiumChips podium={s.podium} className="mt-2 sm:hidden" />
       </div>
       <PodiumChips podium={s.podium} className="order-4 hidden sm:order-3 sm:flex" />

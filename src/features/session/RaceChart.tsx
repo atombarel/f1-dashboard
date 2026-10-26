@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { AxisX, ChartFrame, GridY, Tooltip } from '@/charts/core'
 import { DriverPicker } from '@/components/DriverPicker'
 import { EmptyState, Panel, SectionTitle } from '@/components/ui'
+import { t } from '@/i18n'
 import { onDark, teammateIndex } from '@/lib/colors'
 import { NeutralBands } from './helpers'
 import type { TabProps } from './types'
@@ -33,7 +34,7 @@ function BumpChart({ bundle, ordered, selected, toggle }: { bundle: SessionBundl
   const anyFocus = focus.length > 0
 
   return (
-    <ChartFrame height={n * rowH + margin.top + margin.bottom} margin={margin} ariaLabel="Positions tour par tour">
+    <ChartFrame height={n * rowH + margin.top + margin.bottom} margin={margin} ariaLabel={t('raceChart.positions')}>
       {({ width, height }) => {
         const x = scaleLinear().domain([0, bundle.totalLaps]).range([0, width])
         const y = scaleLinear().domain([1, n]).range([rowH / 2, height - rowH / 2])
@@ -49,7 +50,7 @@ function BumpChart({ bundle, ordered, selected, toggle }: { bundle: SessionBundl
             {Array.from({ length: n }, (_, i) => (
               <line key={i} x2={width} y1={y(i + 1)} y2={y(i + 1)} stroke="var(--color-line)" strokeOpacity={0.5} strokeDasharray="1 5" />
             ))}
-            <AxisX scale={x} height={height} ticks={Math.min(12, bundle.totalLaps)} format={(v) => (v === 0 ? 'Grille' : String(v))} label="Tour" />
+            <AxisX scale={x} height={height} ticks={Math.min(12, bundle.totalLaps)} format={(v) => (v === 0 ? t('raceChart.grid') : String(v))} label={t('raceChart.lap')} />
             {sorted.map(({ d, pos, out }) => {
               const on = focus.includes(d.number)
               const c = onDark(d.teamColour)
@@ -107,14 +108,14 @@ function GapChart({ bundle, drivers, selected }: { bundle: SessionBundle; driver
   const mates = useMemo(() => teammateIndex([...drivers.values()]), [drivers])
   const series = useMemo(() => selected.map((drv) => ({ drv, gaps: bundle.gaps[drv] ?? [] })), [bundle, selected])
   const values = series.flatMap((s) => s.gaps.filter((g): g is number => g !== null))
-  if (!values.length) return <EmptyState title="Aucun pilote">Sélectionne des pilotes pour suivre leur écart avec le leader.</EmptyState>
+  if (!values.length) return <EmptyState title={t('raceChart.noDrivers')}>{t('raceChart.noDriversHint')}</EmptyState>
   // lapped cars blow the scale up: cap around one lap so the battle stays readable
   const cap = Math.max(5, Math.min(Math.max(...values), 110))
 
   return (
     <ChartFrame
       height={340}
-      ariaLabel="Écart au leader"
+      ariaLabel={t('raceChart.gapToLeader')}
       onPointer={(p) => setHover(p ? p.x : null)}
       overlay={({ width }) => {
         if (hover === null) return null
@@ -127,7 +128,7 @@ function GapChart({ bundle, drivers, selected }: { bundle: SessionBundle; driver
         if (!rows.length) return null
         return (
           <Tooltip x={x(lap)} width={width} top={8}>
-            <div className="eyebrow mb-1.5">Tour {lap}</div>
+            <div className="eyebrow mb-1.5">{t('raceChart.lapN', { n: lap })}</div>
             {rows.map((r) => {
               const d = drivers.get(r.drv)
               return (
@@ -137,7 +138,7 @@ function GapChart({ bundle, drivers, selected }: { bundle: SessionBundle; driver
                     <span className="h-3 w-0.5" style={{ background: d ? onDark(d.teamColour) : undefined }} />
                     <span className="font-semibold">{d?.acronym}</span>
                   </span>
-                  <span className="tnum">{r.g === 0 ? 'Leader' : `+${r.g.toFixed(1)}s`}</span>
+                  <span className="tnum">{r.g === 0 ? t('format.leader') : `+${r.g.toFixed(1)}s`}</span>
                 </div>
               )
             })}
@@ -156,8 +157,8 @@ function GapChart({ bundle, drivers, selected }: { bundle: SessionBundle; driver
         return (
           <>
             <NeutralBands items={bundle.neutralizations} x={x} height={height} />
-            <GridY scale={y} width={width} ticks={6} format={(v) => (v === 0 ? 'Leader' : `+${v}s`)} />
-            <AxisX scale={x} height={height} ticks={Math.max(4, Math.floor(width / 70))} label="Tour" />
+            <GridY scale={y} width={width} ticks={6} format={(v) => (v === 0 ? t('format.leader') : `+${v}s`)} />
+            <AxisX scale={x} height={height} ticks={Math.max(4, Math.floor(width / 70))} label={t('raceChart.lap')} />
             {series.map(({ drv, gaps }) => {
               const d = drivers.get(drv)
               return (
@@ -192,13 +193,13 @@ function Overtakes({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) {
       .sort((a, b) => b.made - a.made || a.lost - b.lost)
   }, [bundle, ordered])
   const max = Math.max(1, ...stats.map((s) => Math.max(s.made, s.lost)))
-  if (!bundle.overtakes.length) return <EmptyState title="Aucun dépassement enregistré" />
+  if (!bundle.overtakes.length) return <EmptyState title={t('raceChart.noOvertakes')} />
   return (
     <Panel flat className="p-4">
       <div className="mb-3 grid grid-cols-[1fr_auto_1fr] gap-3 font-mono text-[9px] uppercase tracking-[0.16em] text-dim">
-        <span className="text-right">Subis</span>
+        <span className="text-right">{t('raceChart.conceded')}</span>
         <span className="w-12" />
-        <span>Réalisés</span>
+        <span>{t('raceChart.made')}</span>
       </div>
       <div className="space-y-1">
         {stats.map(({ d, made, lost }) => (
@@ -217,18 +218,18 @@ function Overtakes({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) {
           </div>
         ))}
       </div>
-      <p className="mt-4 text-[11px] text-dim">Dépassements en piste détectés par la F1, y compris pendant les cycles d’arrêts.</p>
+      <p className="mt-4 text-[11px] text-dim">{t('raceChart.overtakesNote')}</p>
     </Panel>
   )
 }
 
 export default function RaceChart({ bundle, drivers, ordered, selected, setSelected }: TabProps) {
   const toggle = (n: number) => setSelected(selected.includes(n) ? selected.filter((x) => x !== n) : [...selected, n])
-  if (!bundle.totalLaps || !Object.keys(bundle.positions).length) return <EmptyState title="Pas de données de course" />
+  if (!bundle.totalLaps || !Object.keys(bundle.positions).length) return <EmptyState title={t('raceChart.noRaceData')} />
   return (
     <div className="space-y-10">
       <section>
-        <SectionTitle index="01" title="Positions tour par tour" aside="Survole ou clique une ligne pour la mettre en avant" />
+        <SectionTitle index="01" title={t('raceChart.positions')} aside={t('raceChart.positionsHint')} />
         <Panel className="p-3 sm:p-4">
           <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
             <div className={clsx('min-w-[640px]')}>
@@ -239,7 +240,7 @@ export default function RaceChart({ bundle, drivers, ordered, selected, setSelec
       </section>
 
       <section>
-        <SectionTitle index="02" title="Écart au leader" aside="Écart à la ligne à la fin de chaque tour" />
+        <SectionTitle index="02" title={t('raceChart.gapToLeader')} aside={t('raceChart.gapHint')} />
         <DriverPicker drivers={ordered} selected={selected} onChange={setSelected} className="mb-4" />
         <Panel className="p-3 sm:p-4">
           <GapChart bundle={bundle} drivers={drivers} selected={selected} />
@@ -247,7 +248,7 @@ export default function RaceChart({ bundle, drivers, ordered, selected, setSelec
       </section>
 
       <section>
-        <SectionTitle index="03" title="Dépassements" aside={`${bundle.overtakes.length} au total`} />
+        <SectionTitle index="03" title={t('raceChart.overtakes')} aside={t('raceChart.total', { n: bundle.overtakes.length })} />
         <Overtakes bundle={bundle} ordered={ordered} />
       </section>
     </div>

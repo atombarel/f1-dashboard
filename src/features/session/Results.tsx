@@ -3,12 +3,13 @@ import type { Driver, ResultRow } from '@shared/types'
 import clsx from 'clsx'
 import { Fragment, useMemo } from 'react'
 import { DriverTag, EmptyState, Panel, Stat, TyreBadge } from '@/components/ui'
+import { t } from '@/i18n'
 import { onDark } from '@/lib/colors'
 import { gap, lapTime, points, raceTime } from '@/lib/format'
 import { stintsByDriver, TableHead, td, th } from './helpers'
 import type { TabProps } from './types'
 
-const STATUS_LABEL: Record<ResultRow['status'], string> = { finished: '', dnf: 'Abandon', dns: 'Non partant', dsq: 'Disqualifié', nc: 'Non classé' }
+const statusLabel = (s: ResultRow['status']) => (s === 'finished' ? '' : t(`results.status.${s}`))
 
 function PosCell({ row }: { row: ResultRow }) {
   const pos = typeof row.position === 'number' ? row.position : null
@@ -41,8 +42,8 @@ function Summary({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
   const avg = (k: 'air' | 'track') => (w.length ? w.reduce((s, x) => s + x[k], 0) / w.length : null)
   const rain = w.some((x) => x.rain)
   const neutral = bundle.neutralizations.reduce<Record<string, number>>((acc, n) => ({ ...acc, [n.type]: (acc[n.type] ?? 0) + 1 }), {})
-  const neutralText = Object.entries(neutral).map(([t, c]) => `${c} ${t}`).join(' · ') || 'Aucune'
-  const leadLabel = isRaceLike(kind) ? 'Vainqueur' : isQualiLike(kind) ? 'Pole position' : 'Plus rapide'
+  const neutralText = Object.entries(neutral).map(([type, c]) => `${c} ${type}`).join(' · ') || t('results.none')
+  const leadLabel = isRaceLike(kind) ? t('results.winner') : isQualiLike(kind) ? t('results.pole') : t('results.fastest')
   const leadSub = isRaceLike(kind) ? raceTime(first?.time) : lapTime(first?.time)
   const air = avg('air')
   const track = avg('track')
@@ -55,22 +56,22 @@ function Summary({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
         )}
         <Stat label={leadLabel} value={<span style={{ color: winner ? onDark(winner.teamColour) : undefined }}>{winner?.acronym ?? '—'}</span>} sub={`${winner?.fullName ?? ''} · ${leadSub}`} />
       </div>
-      <Stat label="Meilleur tour" value={<span className="text-purple">{lapTime(fl?.time)}</span>} sub={fl ? `${flDriver?.acronym ?? fl.driverNumber} · tour ${fl.lap}` : undefined} />
+      <Stat label={t('results.fastestLap')} value={<span className="text-purple">{lapTime(fl?.time)}</span>} sub={fl ? t('results.fastestLapSub', { driver: flDriver?.acronym ?? fl.driverNumber, lap: fl.lap }) : undefined} />
       {isRaceLike(kind) ? (
         <>
-          <Stat label="Dépassements" value={bundle.overtakes.length} sub={`${bundle.totalLaps} tours`} />
-          <Stat label="Neutralisations" value={neutralText} accent={neutralText === 'Aucune' ? undefined : 'var(--color-amber)'} />
+          <Stat label={t('results.overtakes')} value={bundle.overtakes.length} sub={t('results.laps', { n: bundle.totalLaps })} />
+          <Stat label={t('results.neutralisations')} value={neutralText} accent={neutralText === t('results.none') ? undefined : 'var(--color-amber)'} />
         </>
       ) : (
         <>
-          <Stat label="Pilotes" value={bundle.results.length} sub={`${Object.values(bundle.laps).reduce((s, l) => s + l.length, 0)} tours au total`} />
-          <Stat label="Drapeaux rouges" value={bundle.raceControl.filter((m) => m.flag === 'RED').length} />
+          <Stat label={t('results.drivers')} value={bundle.results.length} sub={t('results.totalLaps', { n: Object.values(bundle.laps).reduce((s, l) => s + l.length, 0) })} />
+          <Stat label={t('results.redFlags')} value={bundle.raceControl.filter((m) => m.flag === 'RED').length} />
         </>
       )}
       <Stat
-        label="Météo"
+        label={t('results.weather')}
         value={air !== null && track !== null ? `${air.toFixed(0)}° / ${track.toFixed(0)}°` : '—'}
-        sub={rain ? 'Pluie pendant la session' : 'Air / piste · sec'}
+        sub={rain ? t('results.rain') : t('results.dry')}
         accent={rain ? 'var(--color-wet)' : undefined}
       />
     </Panel>
@@ -89,15 +90,15 @@ function RaceTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
     <table className="w-full border-collapse text-sm">
       <TableHead>
         <tr className="border-b border-line">
-          <th className={clsx(th, 'text-right')}>Pos</th>
-          <th className={th}>Pilote</th>
-          <th className={clsx(th, 'hidden text-right sm:table-cell')}>Grille</th>
-          <th className={clsx(th, 'hidden text-right md:table-cell')}>Tours</th>
-          <th className={clsx(th, 'text-right')}>Temps / écart</th>
-          <th className={clsx(th, 'hidden text-right md:table-cell')}>Meilleur tour</th>
-          <th className={clsx(th, 'hidden text-center lg:table-cell')}>Arrêts</th>
-          <th className={clsx(th, 'hidden sm:table-cell')}>Pneus</th>
-          <th className={clsx(th, 'text-right')}>Pts</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.pos')}</th>
+          <th className={th}>{t('results.col.driver')}</th>
+          <th className={clsx(th, 'hidden text-right sm:table-cell')}>{t('results.col.grid')}</th>
+          <th className={clsx(th, 'hidden text-right md:table-cell')}>{t('results.col.laps')}</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.timeGap')}</th>
+          <th className={clsx(th, 'hidden text-right md:table-cell')}>{t('results.col.bestLap')}</th>
+          <th className={clsx(th, 'hidden text-center lg:table-cell')}>{t('results.col.stops')}</th>
+          <th className={clsx(th, 'hidden sm:table-cell')}>{t('results.col.tyres')}</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.points')}</th>
         </tr>
       </TableHead>
       <tbody>
@@ -123,14 +124,14 @@ function RaceTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
               <td className={clsx(td, 'tnum text-right')}>
                 {out ? (
                   <span className="font-mono text-[11px] uppercase text-signal" title={r.statusText ?? undefined}>
-                    {STATUS_LABEL[r.status]}
+                    {statusLabel(r.status)}
                     {r.statusText && r.statusText !== 'Retired' && r.statusText !== 'Finished' ? ` · ${r.statusText}` : ''}
                   </span>
                 ) : i === 0 ? (
                   <span className="text-paper">{raceTime(r.time)}</span>
                 ) : r.gap === null && r.statusText && r.statusText !== 'Finished' ? (
                   <span className="font-mono text-[11px] uppercase text-amber" title={r.statusText}>
-                    {r.statusText === 'Retired' ? 'Abandon · classé' : r.statusText}
+                    {r.statusText === 'Retired' ? t('results.retiredClassified') : r.statusText}
                   </span>
                 ) : (
                   <span className="text-paper/85">{gap(r.gap)}</span>
@@ -172,20 +173,20 @@ function QualiTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
   const pole = bundle.results[0]?.q?.findLast((x) => typeof x === 'number') ?? bundle.results[0]?.time ?? null
   // Elimination separators: first row knocked out in Q1 / Q2.
   const segOf = (r: ResultRow) => (r.q?.[2] != null ? 3 : r.q?.[1] != null ? 2 : r.q?.[0] != null ? 1 : 0)
-  const segName = ['Sans temps', 'Éliminés en Q1', 'Éliminés en Q2', 'Q3']
+  const segName = [t('results.seg.noTime'), t('results.seg.outQ1'), t('results.seg.outQ2'), t('results.seg.q3')]
   return (
     <table className="w-full border-collapse text-sm max-sm:[&_span.truncate]:hidden">
       <TableHead>
         <tr className="border-b border-line">
-          <th className={clsx(th, 'text-right')}>Pos</th>
-          <th className={th}>Pilote</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.pos')}</th>
+          <th className={th}>{t('results.col.driver')}</th>
           {['Q1', 'Q2', 'Q3'].map((q) => (
             <th key={q} className={clsx(th, 'text-right')}>
               {q}
             </th>
           ))}
-          <th className={clsx(th, 'hidden text-right sm:table-cell')}>Écart</th>
-          <th className={clsx(th, 'hidden text-right sm:table-cell')}>Tours</th>
+          <th className={clsx(th, 'hidden text-right sm:table-cell')}>{t('results.col.gap')}</th>
+          <th className={clsx(th, 'hidden text-right sm:table-cell')}>{t('results.col.laps')}</th>
         </tr>
       </TableHead>
       <tbody>
@@ -217,7 +218,7 @@ function QualiTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
                     </td>
                   )
                 })}
-                <td className={clsx(td, 'tnum hidden text-right text-muted sm:table-cell')} title={seg ? `Écart au meilleur temps de la Q${seg}` : undefined}>
+                <td className={clsx(td, 'tnum hidden text-right text-muted sm:table-cell')} title={seg ? t('results.qualiGapTitle', { seg }) : undefined}>
                   {i === 0 || best === null || !seg ? '' : `+${(best - (seg === 3 ? (pole ?? best) : (bestPerSegment[seg - 1] ?? best))).toFixed(3)}`}
                 </td>
                 <td className={clsx(td, 'tnum hidden text-right text-muted sm:table-cell')}>{r.laps ?? bundle.laps[r.driverNumber]?.length ?? '—'}</td>
@@ -237,12 +238,12 @@ function PracticeTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>
     <table className="w-full border-collapse text-sm">
       <TableHead>
         <tr className="border-b border-line">
-          <th className={clsx(th, 'text-right')}>Pos</th>
-          <th className={th}>Pilote</th>
-          <th className={clsx(th, 'text-right')}>Meilleur tour</th>
-          <th className={clsx(th, 'text-right')}>Écart</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.pos')}</th>
+          <th className={th}>{t('results.col.driver')}</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.bestLap')}</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.gap')}</th>
           <th className={clsx(th, 'hidden w-1/4 md:table-cell')} />
-          <th className={clsx(th, 'text-right')}>Tours</th>
+          <th className={clsx(th, 'text-right')}>{t('results.col.laps')}</th>
         </tr>
       </TableHead>
       <tbody>
@@ -274,7 +275,7 @@ function PracticeTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>
 
 export default function Results({ bundle, drivers }: TabProps) {
   const kind = bundle.session.kind
-  if (!bundle.results.length) return <EmptyState title="Pas de classement">OpenF1 n’a pas publié de classement pour cette session.</EmptyState>
+  if (!bundle.results.length) return <EmptyState title={t('results.emptyTitle')}>{t('results.emptyBody')}</EmptyState>
   return (
     <div>
       <Summary bundle={bundle} drivers={drivers} />

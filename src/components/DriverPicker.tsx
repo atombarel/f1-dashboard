@@ -1,5 +1,6 @@
 import type { Driver } from '@shared/types'
 import clsx from 'clsx'
+import { t } from '@/i18n'
 import { onDark } from '@/lib/colors'
 
 /** Toggle chips, one per driver, in classification order. */
@@ -46,7 +47,7 @@ export function DriverPicker({
       })}
       {selected.length > 0 && (
         <button onClick={() => onChange([])} className="px-2 py-1 font-mono text-[11px] text-dim hover:text-signal">
-          effacer
+          {t('driverPicker.clear')}
         </button>
       )}
     </div>
