@@ -126,7 +126,7 @@ export function SessionPage() {
   return (
     <>
       {header}
-      <nav className="sticky top-14 z-40 -mx-4 mb-8 overflow-x-auto border-b border-line bg-ink/85 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6">
+      <nav className="scroll-strip sticky top-14 z-40 -mx-4 mb-8 border-b border-line bg-ink/85 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6">
         <div className="flex">
           {tabs.map((id, i) => (
             <Link
@@ -142,7 +142,7 @@ export function SessionPage() {
               <span className="text-[9px] text-dim">{String(i + 1).padStart(2, '0')}</span>
               {t(`session.tabs.${id}`)}
               {id === 'telemetry' && !meta.data.telemetryUrl && <span className="animate-pulse-dot size-1 rounded-full bg-amber" title={t('session.telemetryProcessing')} />}
-              {id === tab && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-signal" />}
+              {id === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-signal" />}
             </Link>
           ))}
         </div>

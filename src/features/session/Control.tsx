@@ -12,15 +12,16 @@ import type { TabProps } from './types'
 type Filter = 'all' | 'flags' | 'sc' | 'stewards' | 'limits'
 type FlagLabel = 'green' | 'clear' | 'yellow' | 'doubleYellow' | 'red' | 'blue' | 'chequered' | 'blackWhite' | 'blackOrange' | 'black'
 
-const FLAG_STYLE: Record<string, { bg: string; fg: string; label: FlagLabel }> = {
+/** `mark`: patterned flags get a swatch before the label, which itself always sits on a solid colour. */
+const FLAG_STYLE: Record<string, { bg: string; fg: string; label: FlagLabel; mark?: string }> = {
   GREEN: { bg: 'var(--color-green)', fg: 'var(--color-ink)', label: 'green' },
   CLEAR: { bg: 'var(--color-line-2)', fg: 'var(--color-paper)', label: 'clear' },
   YELLOW: { bg: 'var(--color-yellow)', fg: 'var(--color-ink)', label: 'yellow' },
-  'DOUBLE YELLOW': { bg: 'repeating-linear-gradient(90deg, var(--color-yellow) 0 6px, var(--color-ink) 6px 8px)', fg: 'var(--color-ink)', label: 'doubleYellow' },
+  'DOUBLE YELLOW': { bg: 'var(--color-yellow)', fg: 'var(--color-ink)', label: 'doubleYellow', mark: 'repeating-linear-gradient(90deg, var(--color-ink) 0 2px, transparent 2px 4px)' },
   RED: { bg: 'var(--color-signal)', fg: 'white', label: 'red' },
   BLUE: { bg: 'var(--color-wet)', fg: 'white', label: 'blue' },
-  CHEQUERED: { bg: 'repeating-conic-gradient(var(--color-paper) 0 25%, var(--color-ink) 0 50%) 0 0 / 8px 8px', fg: 'var(--color-ink)', label: 'chequered' },
-  'BLACK AND WHITE': { bg: 'linear-gradient(135deg, var(--color-paper) 50%, var(--color-ink) 50%)', fg: 'var(--color-ink)', label: 'blackWhite' },
+  CHEQUERED: { bg: 'var(--color-paper)', fg: 'var(--color-ink)', label: 'chequered', mark: 'repeating-conic-gradient(var(--color-paper) 0 25%, var(--color-ink) 0 50%) 0 0 / 5px 5px' },
+  'BLACK AND WHITE': { bg: 'var(--color-paper)', fg: 'var(--color-ink)', label: 'blackWhite', mark: 'linear-gradient(135deg, var(--color-paper) 50%, var(--color-ink) 50%)' },
   'BLACK AND ORANGE': { bg: 'var(--color-amber)', fg: 'var(--color-ink)', label: 'blackOrange' },
   BLACK: { bg: 'var(--color-ink)', fg: 'var(--color-paper)', label: 'black' },
 }
@@ -130,12 +131,13 @@ function Messages({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
                   const who = mentions(m, drivers)
                   return (
                     <div key={i} className="flex flex-col gap-1.5 px-3 py-2.5 hover:bg-panel-2 sm:flex-row sm:items-start sm:gap-3">
-                      <div className="flex shrink-0 items-center gap-2 sm:w-44">
+                      <div className="flex shrink-0 items-center gap-2 sm:w-48">
                         <span className="tnum text-[10px] text-dim">{clock(m.date)}</span>
                         <span
-                          className={clsx('px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider', c.bg === 'transparent' && 'border border-current')}
+                          className={clsx('inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider', c.bg === 'transparent' && 'border border-current')}
                           style={{ background: c.bg, color: c.fg }}
                         >
+                          {c.mark && <span className="size-2.5 shrink-0 border border-ink/40" style={{ background: c.mark }} />}
                           {c.label}
                           {m.sector ? ` · S${m.sector}` : ''}
                         </span>

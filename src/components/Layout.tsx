@@ -25,12 +25,12 @@ function NavLink({ to, params, children, active }: { to: string; params?: Record
       to={to}
       params={params as never}
       className={clsx(
-        'relative px-2 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:tracking-[0.16em]',
+        'relative flex items-center px-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors sm:px-3 sm:tracking-[0.16em]',
         active ? 'text-paper' : 'text-muted hover:text-paper',
       )}
     >
       {children}
-      {active && <span className="absolute inset-x-2 -bottom-[13px] h-0.5 bg-signal sm:inset-x-3" />}
+      {active && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-signal sm:inset-x-3" />}
     </Link>
   )
 }
@@ -70,7 +70,7 @@ export function Layout() {
       <header className="sticky top-0 z-50 border-b border-line bg-ink/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:gap-6 sm:px-6">
           <Logo />
-          <nav className="flex items-center overflow-x-auto">
+          <nav className="scroll-strip flex items-stretch self-stretch">
             <NavLink to="/" active={path === '/'}>
               {t('nav.home')}
             </NavLink>
