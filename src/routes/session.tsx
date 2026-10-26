@@ -1,4 +1,4 @@
-import { isRaceLike } from '@shared/sessions'
+import { isQualiLike, isRaceLike } from '@shared/sessions'
 import type { Driver } from '@shared/types'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -19,6 +19,7 @@ const Strategy = lazy(() => import('@/features/session/Strategy'))
 const Control = lazy(() => import('@/features/session/Control'))
 const Telemetry = lazy(() => import('@/features/telemetry/Telemetry'))
 const Replay = lazy(() => import('@/features/telemetry/Replay'))
+const QualiGaps = lazy(() => import('@/features/quali/QualiGaps'))
 
 export function SessionPage() {
   const { sessionKey } = sessionRoute.useParams()
@@ -33,6 +34,7 @@ export function SessionPage() {
     const t: SessionTab[] = ['results', 'laps']
     if (isRaceLike(kind)) t.push('race')
     t.push('strategy', 'telemetry')
+    if (isQualiLike(kind)) t.push('gaps')
     if (isRaceLike(kind)) t.push('replay')
     t.push('control')
     return t
@@ -141,7 +143,7 @@ export function SessionPage() {
             >
               <span className="text-[9px] text-dim">{String(i + 1).padStart(2, '0')}</span>
               {t(`session.tabs.${id}`)}
-              {id === 'telemetry' && !meta.data.telemetryUrl && <span className="animate-pulse-dot size-1 rounded-full bg-amber" title={t('session.telemetryProcessing')} />}
+              {(id === 'telemetry' || id === 'gaps') && !meta.data.telemetryUrl && <span className="animate-pulse-dot size-1 rounded-full bg-amber" title={t('session.telemetryProcessing')} />}
               {id === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-signal" />}
             </Link>
           ))}
@@ -154,6 +156,7 @@ export function SessionPage() {
           {tab === 'race' && <RaceChart {...props} />}
           {tab === 'strategy' && <Strategy {...props} />}
           {tab === 'telemetry' && <Telemetry {...props} />}
+          {tab === 'gaps' && <QualiGaps {...props} />}
           {tab === 'replay' && <Replay {...props} />}
           {tab === 'control' && <Control {...props} />}
         </div>

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import common from '../src/i18n/messages/common'
 import pages from '../src/i18n/messages/pages'
+import quali from '../src/i18n/messages/quali'
 import results from '../src/i18n/messages/results'
 import sessionFeatures from '../src/i18n/messages/session-features'
 import telemetry from '../src/i18n/messages/telemetry'
 import { dictionaries } from '../src/i18n/messages'
 
-const modules = { common, pages, results, sessionFeatures, telemetry }
+const modules = { common, pages, results, sessionFeatures, telemetry, quali }
 
 /** "a.b.c" → message, plural forms flattened as "a.b.c#one". */
 function flatten(node: unknown, prefix = ''): Map<string, string> {
