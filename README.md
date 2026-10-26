@@ -81,7 +81,7 @@ limiter et les Workflows d'ingestion restent ceux du Worker de prod. L'URL est d
 Exploitation : le secret GitHub `ADMIN_TOKEN` est poussé dans le Worker à chaque déploiement ; le workflow manuel
 **Ops** (onglet Actions) affiche l'état d'ingestion et les dernières instances de Workflow.
 
-Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 5 jobs en parallèle max).
+Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 jobs en parallèle max).
 
 Pour accélérer le rattrapage de la télémétrie, `npm run backfill:local` fait tourner le Worker sur sa machine (env
 `backfill` de `wrangler.jsonc`) contre la D1 et le R2 de prod, avec son propre rate limiter et ses propres workflows :
