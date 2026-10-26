@@ -43,5 +43,33 @@
   "triggers": {
     // Calendar sync + ingestion of freshly finished sessions, and a nightly backfill/standings pass.
     "crons": ["*/10 * * * *", "30 4 * * *"]
+  },
+
+  "env": {
+    // PR previews (`CLOUDFLARE_ENV=preview`): Worker `f1-dashboard-preview` on workers.dev, reading the production
+    // D1/R2 so pages have real data. It owns no ingestion: no crons, and the gate + workflows are the production
+    // Worker's (script_name), so upstream calls still go through the single global rate limiter.
+    "preview": {
+      "workers_dev": true,
+      "routes": [],
+      "vars": {
+        "OPENF1_BASE": "https://api.openf1.org/v1",
+        "JOLPICA_BASE": "https://api.jolpi.ca/ergast/f1",
+        "FIRST_SEASON": "2023"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "f1-api-cache-db", "database_id": "6987f960-070c-4d07-b6ed-1cbdf937e7f0", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [{ "binding": "BUNDLES", "bucket_name": "f1-bundles" }],
+      "durable_objects": {
+        "bindings": [{ "name": "GATE", "class_name": "UpstreamGate", "script_name": "f1-dashboard" }]
+      },
+      "migrations": [],
+      "workflows": [
+        { "name": "f1-ingest-session", "binding": "INGEST", "class_name": "IngestSessionWorkflow", "script_name": "f1-dashboard" },
+        { "name": "f1-ingest-meeting", "binding": "INGEST_MEETING", "class_name": "IngestMeetingWorkflow", "script_name": "f1-dashboard" }
+      ],
+      "triggers": { "crons": [] }
+    }
   }
 }
