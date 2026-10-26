@@ -1,110 +1,145 @@
-# F1 RaceView — analyse F1 100 % Cloudflare
+# F1 RaceView
 
-Chaque session de F1 depuis 2023 : classement, temps au tour, course tour par tour, stratégies pneus,
-direction de course, météo, **télémétrie comparée** (vitesse, gaz, frein, rapport, delta, carte de domination
-par mini-secteur) et **replay** des courses.
+**[f1raceview.com](https://f1raceview.com)** is a Formula 1 analysis site covering every session since 2023. It runs entirely on Cloudflare.
 
-Un seul Worker Cloudflare sert le site (assets statiques) et l'API `/api/*`.
+- **Results**: the official classification, grid and penalties, and the championship standings
+- **Laps**: lap times, ideal laps from the best sectors, top speeds, and long-run pace
+- **Race**: positions lap by lap, the gap to the leader, and overtakes
+- **Strategy**: tyre stints, pit stop times, and tyre degradation
+- **Telemetry**: speed, throttle, brake and gear compared driver against driver, a running delta, and a mini-sector dominance map
+- **Replay**: the whole race replayed on the track map
+- **Race control**: flags, the safety car, stewards' decisions, and the weather
 
-## Architecture
+The interface is in French and English.
+
+## How it works
+
+A single Cloudflare Worker serves both the single-page app (as static assets) and a small [Hono](https://hono.dev) API under `/api`. Visitors never reach the upstream data providers. Every session is ingested once in the background, stored in D1 and R2, and then served from there.
+
+```mermaid
+flowchart LR
+  user([Browser]) --> worker
+
+  subgraph cf [Cloudflare]
+    worker[Worker<br/>SPA assets + /api] --> cache[(Edge cache)]
+    worker --> d1[(D1<br/>calendar, ingestion state)]
+    worker --> r2[(R2<br/>gzipped session bundles)]
+    cron[[Cron]] --> wf[Workflows<br/>ingest session / meeting]
+    worker -. first visit .-> wf
+    wf --> d1
+    wf --> r2
+    wf --> gate{{Durable Object<br/>UpstreamGate}}
+  end
+
+  gate --> openf1[OpenF1]
+  gate --> jolpica[Jolpica-F1]
+  gate --> mv[MultiViewer]
+```
+
+### Ingestion
+
+- **Scheduling.** A cron runs every 10 minutes. It syncs the calendar and queues each session about 40 minutes after the chequered flag. A second pass the next day picks up the stewards' decisions. A nightly run backfills older seasons a few weekends at a time and refreshes the standings.
+- **Workflows.** Ingestion runs as [Cloudflare Workflows](https://developers.cloudflare.com/workflows/) made of small steps that can be retried. If a request fails, only that step runs again. Telemetry is fetched in 10-minute windows of car data so each step fits in Worker memory.
+- **Rate limiting.** Every upstream request, from any isolate or workflow, goes through `UpstreamGate`, a Durable Object with one instance per provider. The gate:
+  - keeps requests under each provider's limit (about 3 req/s for OpenF1)
+  - merges identical requests that are in flight at the same time
+  - backs off on 429 and 5xx responses
+  - has two priority lanes, so a session a visitor is waiting for jumps ahead of the backfill
+- **Cross-checking sources.** OpenF1 provides the raw timing data. It is checked against Jolpica's official classification for the grid, retirement status and points. If OpenF1 has no result yet, the classification comes entirely from Jolpica.
+
+### Serving
+
+- **Immutable bundles.** Each session is stored in R2 as a gzipped bundle, with the telemetry for each driver and the replay data stored separately. The Worker sends the stored bytes unchanged (`encodeBody: 'manual'`), at URLs versioned by a content hash, with `Cache-Control: immutable`. If the content changes, the hash changes.
+- **Compact telemetry.** Every channel is a series of integers, encoded as differences from the previous value, then gzipped. The result is about 45% smaller than plain JSON.
+- **Edge caching.** Responses built from D1 are cached at the edge with ETags. The cache time is short during a race weekend and longer the rest of the time.
+- **Frontend.** React 19, TanStack Router and Query, and Tailwind v4. The app is split into chunks by route and by tab, and a page's data is preloaded when you hover a link to it. All charts are hand-written SVG and canvas, with no chart library.
+
+### Repository layout
 
 ```
-                         ┌────────────── Cloudflare ──────────────────────────────────────┐
- visiteur ──► Worker ──► │ /api/*  Hono ─► Cache API (edge) ─► D1 (calendrier, états)       │
-     ▲          │        │                                 └─► R2 (bundles gzip immuables)  │
-     │          └─────── │ assets statiques (SPA, /assets/* immutable)                       │
-     │                   │                                                                  │
-     │                   │ Cron */10 min ─► Workflow « ingest session » (étapes + retries)  │
-     │                   │                      │                                           │
-     │                   │                      ▼                                           │
-     │                   │          Durable Object « UpstreamGate » (1 file globale,        │
-     │                   │          2 voies de priorité, ≤ 3 req/s, backoff sur 429)        │
-     │                   └──────────────────────┼───────────────────────────────────────────┘
-     │                                          ▼
-     └──── jamais d'appel direct ─────   OpenF1 · Jolpica-F1 · MultiViewer
+shared/          API contract (types), session helpers, telemetry codec. Used by both the worker and the app
+worker/
+  index.ts       Hono routes, cron entry point
+  upstream/      UpstreamGate (Durable Object) and typed OpenF1 / Jolpica / MultiViewer clients
+  ingest/        workflows, scheduler, and the pure transforms (bundle.ts, telemetry.ts)
+  lib/           D1 queries, R2 storage, HTTP caching helpers
+src/             React app: routes, features (session tabs, telemetry, replay), charts, i18n
+migrations/      D1 schema
+test/            vitest suite, run on real data from the 2026 Singapore GP
 ```
 
-**Pourquoi c'est fiable**
+## Running locally
 
-- Les visiteurs ne touchent **jamais** les APIs externes : tout est servi depuis D1/R2.
-- Chaque session est ingérée **une fois** (~10 requêtes + 2 par pilote pour la télémétrie), 40 min après le
-  drapeau, puis une **2ᵉ passe** le lendemain pour les décisions des commissaires.
-- Le Workflow découpe l'ingestion en étapes rejouables : une erreur ne relance que la requête fautive.
-- Le Durable Object sérialise *toutes* les requêtes vers OpenF1 (limite 3 req/s, ~30/min), coalesce les doublons,
-  et fait passer ce qu'un visiteur attend avant le backfill.
-- Le classement officiel (Jolpica) est croisé avec OpenF1 : grille, statut d'abandon, points, et repli complet si
-  OpenF1 n'a pas encore le résultat.
-
-**Pourquoi c'est rapide**
-
-- Les bundles de session, la télémétrie et le replay sont stockés **gzippés** dans R2 et envoyés tels quels
-  (`encodeBody: 'manual'`), derrière des URLs versionnées par hash (`?v=…`) → `Cache-Control: immutable`.
-- La télémétrie est encodée en delta (≈ 45 % plus léger que du JSON brut).
-- Les endpoints issus de D1 sont mis en cache à l'edge (TTL court pendant un week-end de course, ETag/304).
-- SPA découpée par route et par onglet, préchargement au survol des liens.
-
-## Développement
+Requires Node 24.
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars       # ADMIN_TOKEN pour les endpoints /api/admin
+cp .dev.vars.example .dev.vars   # sets ADMIN_TOKEN for the /api/admin endpoints
 npm run db:migrate:local
-npm run dev                           # http://localhost:5173 — Worker, D1, R2, DO et Workflows en local
-
-# amorcer les données locales
-curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" localhost:5173/api/admin/sync/2026
-curl localhost:5173/api/sessions/11388   # la 1re visite d'une session terminée lance son ingestion
+npm run dev                      # http://localhost:5173. Runs the Worker, D1, R2, Durable Objects and Workflows locally
 ```
 
-`npm test` (normalisation sur de vraies données du GP de Singapour 2026), `npm run typecheck`, `npm run build`.
-
-## Déploiement
-
-La base D1 (`f1-api-cache-db`, reprise de la v1) est déjà déclarée et la CI crée le bucket R2 si besoin. Une seule fois :
+The local database starts empty. To seed it, sync a season's calendar, then open any finished session. The first visit starts its ingestion.
 
 ```bash
-npx wrangler login
-npx wrangler secret put ADMIN_TOKEN       # optionnel : sans lui les endpoints /api/admin restent fermés
+curl -X POST -H "Authorization: Bearer dev-admin-token" localhost:5173/api/admin/sync/2026
 ```
 
-Ensuite chaque push sur `main` lance `.github/workflows/ci.yml` : typecheck, tests, build, migrations D1, déploiement.
-Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Workflows) et `CLOUDFLARE_ACCOUNT_ID`.
+Other scripts:
 
-Le site est servi sur **https://f1raceview.com** (l'ancien domaine `f1-api.edge-mega.com` reste branché ; routes `custom_domain` dans `wrangler.jsonc`, nécessaires aussi
-pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
-`f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
-
-Chaque PR est aussi déployée en preview sur le Worker `f1-dashboard-preview` (`*.workers.dev`, env `preview` de
-`wrangler.jsonc`) : mêmes D1 et R2 que la prod, donc de vraies données, mais ni cron ni endpoints admin ; le rate
-limiter et les Workflows d'ingestion restent ceux du Worker de prod. L'URL est dans le résumé du job CI.
-
-Exploitation : le secret GitHub `ADMIN_TOKEN` est poussé dans le Worker à chaque déploiement ; le workflow manuel
-**Ops** (onglet Actions) affiche l'état d'ingestion et les dernières instances de Workflow.
-
-Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 jobs en parallèle max).
-
-Pour accélérer le rattrapage de la télémétrie, `npm run backfill:local` fait tourner le Worker sur sa machine (env
-`backfill` de `wrangler.jsonc`) contre la D1 et le R2 de prod, avec son propre rate limiter et ses propres workflows :
-OpenF1 voit une autre IP, donc un autre quota. Il ne prend que des jobs de télémétrie (4 en parallèle), réservés dans
-D1 comme ceux de la prod, donc jamais en double ; un job interrompu est repris par n'importe qui au bout de 2 h.
-Il faut `wrangler login` et l'`ADMIN_TOKEN` de `.dev.vars` ; le script empêche la mise en veille.
+| Command | |
+|---|---|
+| `npm test` | Runs the tests on real session data |
+| `npm run typecheck` | Type-checks the app and the worker (run `npm run cf-typegen` first if you edit `wrangler.jsonc`) |
+| `npm run build` | Builds the production bundle |
 
 ## API
 
-| Endpoint | Cache |
+All endpoints are public and read-only, except the admin ones.
+
+| Endpoint | Caching |
 |---|---|
-| `GET /api/home` | 30 s en week-end de course, sinon 5 min |
-| `GET /api/seasons/:year` · `/api/meetings/:key` | idem |
-| `GET /api/sessions/:key` → pointeurs versionnés | court |
-| `GET /api/sessions/:key/bundle?v=` | immutable |
-| `GET /api/sessions/:key/telemetry/:driver?v=` | immutable |
-| `GET /api/sessions/:key/replay?v=` | immutable |
-| `GET /api/circuits/:circuit/:year` | 1 jour |
-| `GET /api/standings/:year` | 5 min (saison en cours) |
-| `POST /api/admin/{sync/:year, ingest/:key, standings/:year, tick}` · `GET /api/admin/status` | `Bearer ADMIN_TOKEN` |
+| `GET /api/home` | 30 s during a race weekend, 5 min otherwise |
+| `GET /api/seasons/:year`, `GET /api/meetings/:key` | Same as `/api/home` |
+| `GET /api/sessions/:key` | Short. Returns versioned URLs to the session's data |
+| `GET /api/sessions/:key/bundle?v=` | Immutable |
+| `GET /api/sessions/:key/telemetry/:driver?v=` | Immutable |
+| `GET /api/sessions/:key/replay?v=` | Immutable |
+| `GET /api/circuits/:circuit/:year` | 1 day |
+| `GET /api/standings/:year` | 5 min (current season) |
+| `POST /api/admin/{sync/:year, ingest/:key, standings/:year, tick}`, `GET /api/admin/status` | `Bearer ADMIN_TOKEN` |
 
-## Sources
+## Deployment
 
-[OpenF1](https://openf1.org) (tours, pneus, télémétrie, positions…), [Jolpica-F1](https://github.com/jolpica/jolpica-f1)
-(classements officiels, championnats), [MultiViewer](https://multiviewer.app) (tracés des circuits).
-Projet non officiel, sans lien avec Formula One Management.
+On every push to `main`, [CI](.github/workflows/ci.yml) runs these steps:
+
+1. Type-check
+2. Run the tests
+3. Build
+4. Apply the D1 migrations
+5. Deploy the Worker
+
+Pull requests from this repository get a preview Worker on `workers.dev` that reads the production data. Previews have no cron and no admin endpoints. The preview URL is shown in the CI job summary.
+
+To run your own instance, set these GitHub secrets: `CLOUDFLARE_API_TOKEN` (with access to Workers, D1, R2 and Workflows), `CLOUDFLARE_ACCOUNT_ID` and `ADMIN_TOKEN`. Also change the D1 database ID and the domains in `wrangler.jsonc`.
+
+<details>
+<summary>Backfill helper</summary>
+
+OpenF1 throttles requests by IP address, so you can speed up the telemetry backfill by also running it from your own machine. `npm run backfill:local` starts the Worker locally (the `backfill` environment in `wrangler.jsonc`). It uses the production D1 and R2, but its own rate limiter and workflows. It only takes telemetry jobs. Jobs are claimed in D1 the same way production claims them, so the two never run the same job. If a job is interrupted, either side picks it up again after 2 hours. The helper needs `wrangler login` and the `ADMIN_TOKEN` from `.dev.vars`.
+
+</details>
+
+## Data sources
+
+- [OpenF1](https://openf1.org): timing, laps, tyres, positions, car telemetry, race control
+- [Jolpica-F1](https://github.com/jolpica/jolpica-f1): official classifications and championship standings
+- [MultiViewer](https://multiviewer.app): circuit layouts
+
+Thanks to these projects for making the data available.
+
+## License
+
+[MIT](LICENSE).
+
+F1 RaceView is an unofficial project. It is not associated with Formula 1 or Formula One Management. F1, FORMULA ONE and related marks are trademarks of Formula One Licensing B.V.
