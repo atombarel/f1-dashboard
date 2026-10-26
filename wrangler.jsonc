@@ -6,9 +6,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
-  // Same domain as the previous API worker; this Worker now serves both the site and /api.
-  // Custom domain is also what enables the Cache API (it is a no-op on *.workers.dev).
-  "routes": [{ "pattern": "f1-api.edge-mega.com", "custom_domain": true }],
+  // f1raceview.com is the site; the old f1-api.edge-mega.com keeps serving it so existing links still work.
+  // Custom domains are also what enables the Cache API (it is a no-op on *.workers.dev).
+  "routes": [
+    { "pattern": "f1raceview.com", "custom_domain": true },
+    { "pattern": "f1-api.edge-mega.com", "custom_domain": true }
+  ],
 
   // The SPA is served from static assets; only /api/* hits the Worker first.
   "assets": {

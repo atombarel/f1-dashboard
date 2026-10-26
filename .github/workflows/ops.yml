@@ -16,7 +16,7 @@ jobs:
       - run: npm ci
       - name: Ingestion status
         run: |
-          curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://f1-api.edge-mega.com/api/admin/status | jq .
+          curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://f1raceview.com/api/admin/status | jq .
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
       - name: Latest workflow instances
