@@ -28,7 +28,8 @@ function buildUrl(base: string, path: string, params: Params) {
   return `${base}/${path}${query ? `?${query}` : ''}`
 }
 
-function gate(env: Env, name: string): DurableObjectStub<UpstreamGate> {
+/** Typed stub: the binding is untyped in the preview env, where the class lives in the production Worker. */
+export function gate(env: Env, name: string): DurableObjectStub<UpstreamGate> {
   return env.GATE.get(env.GATE.idFromName(name)) as DurableObjectStub<UpstreamGate>
 }
 
