@@ -216,24 +216,28 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
     for (const [i, [a, b]] of meta.windows.entries()) {
       await step.do(`location window ${i}`, RETRY, async () => {
         const raw = await openf1<OF1Location & { driver_number: number }>(up, 'location', { session_key: session.session_key, 'date>=': iso(a), 'date<': iso(b) })
-        for (const [driver, rows] of byDriver(raw))
-          if (wanted.has(driver)) await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}-${i}`), compactLocation(rows, sessionStart))
+        await Promise.all(
+          [...byDriver(raw)]
+            .filter(([driver]) => wanted.has(driver))
+            .map(([driver, rows]) => putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}-${i}`), compactLocation(rows, sessionStart))),
+        )
         return raw.length
       })
       await step.do(`car window ${i}`, RETRY, async () => {
         const raw = await openf1<OF1CarData & { driver_number: number }>(up, 'car_data', { session_key: session.session_key, 'date>=': iso(a), 'date<': iso(b) })
-        for (const [driver, rows] of byDriver(raw))
-          if (wanted.has(driver)) await putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `car-${driver}-${i}`), compactCar(rows, sessionStart))
+        await Promise.all(
+          [...byDriver(raw)]
+            .filter(([driver]) => wanted.has(driver))
+            .map(([driver, rows]) => putJson(this.env.BUNDLES, keys.scratch(session.session_key, run, `car-${driver}-${i}`), compactCar(rows, sessionStart))),
+        )
         return raw.length
       })
     }
 
     const readParts = async <T extends { t: number[] }>(prefix: string, driver: number): Promise<T | null> => {
       const parts: T[] = []
-      for (let i = 0; i < meta.windows.length; i++) {
-        const p = await getJson<T>(this.env.BUNDLES, keys.scratch(session.session_key, run, `${prefix}-${driver}-${i}`))
-        if (p?.t.length) parts.push(p)
-      }
+      const all = await Promise.all(meta.windows.map((_, i) => getJson<T>(this.env.BUNDLES, keys.scratch(session.session_key, run, `${prefix}-${driver}-${i}`))))
+      for (const p of all) if (p?.t.length) parts.push(p)
       return parts.length ? mergeSeries(parts) : null
     }
 
@@ -263,10 +267,11 @@ export class IngestSessionWorkflow extends WorkflowEntrypoint<Env, IngestParams>
         const start = Math.floor(Math.min(...starts)) - 5
         const length = Math.ceil(Math.max(...ends) - start) + 10
         const cars: Record<number, { x: number[]; y: number[] }> = {}
-        for (const driver of meta.drivers) {
-          const track = await getJson<CompactTrack>(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}`))
+        const tracks = await Promise.all(meta.drivers.map((driver) => getJson<CompactTrack>(this.env.BUNDLES, keys.scratch(session.session_key, run, `loc-${driver}`))))
+        meta.drivers.forEach((driver, i) => {
+          const track = tracks[i]
           if (track?.t.length) cars[driver] = resampleTrack(track, start, length, 1)
-        }
+        })
         await putJson(this.env.BUNDLES, keys.replay(session.session_key, meta.telemetryVersion), assembleReplay(start, length, 1, cars))
         return true
       })

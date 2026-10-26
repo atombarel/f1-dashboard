@@ -81,7 +81,13 @@ limiter et les Workflows d'ingestion restent ceux du Worker de prod. L'URL est d
 Exploitation : le secret GitHub `ADMIN_TOKEN` est poussé dans le Worker à chaque déploiement ; le workflow manuel
 **Ops** (onglet Actions) affiche l'état d'ingestion et les dernières instances de Workflow.
 
-Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 3 sessions en parallèle max).
+Le cron remplit automatiquement l'historique (une saison de calendrier par passage, 5 jobs en parallèle max).
+
+Pour accélérer le rattrapage de la télémétrie, `npm run backfill:local` fait tourner le Worker sur sa machine (env
+`backfill` de `wrangler.jsonc`) contre la D1 et le R2 de prod, avec son propre rate limiter et ses propres workflows :
+OpenF1 voit une autre IP, donc un autre quota. Il ne prend que des jobs de télémétrie (4 en parallèle), réservés dans
+D1 comme ceux de la prod, donc jamais en double ; un job interrompu est repris par n'importe qui au bout de 2 h.
+Il faut `wrangler login` et l'`ADMIN_TOKEN` de `.dev.vars` ; le script empêche la mise en veille.
 
 ## API
 
