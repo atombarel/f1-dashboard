@@ -1,5 +1,5 @@
 import { isQualiLike, isRaceLike } from '../../shared/sessions'
-import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, MAX_ATTEMPTS, telemetryCandidates, type SessionRow } from '../lib/db'
+import { claimSession, claimTelemetry, countQueued, ingestCandidates, kvGet, MAX_ATTEMPTS, type Runner, telemetryCandidates, type SessionRow } from '../lib/db'
 import type { Upstream } from '../upstream/openf1'
 import { syncSeason } from './calendar'
 import { refreshStandings } from './standings'
@@ -8,12 +8,19 @@ import type { IngestParams } from './workflow'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 /** Concurrent background workflows. User-triggered ones bypass this. */
-const MAX_BACKGROUND = 3
+const MAX_BACKGROUND = 5
 /** Weekends fetched together by one backfill run. */
 const MEETINGS_PER_BATCH = 6
 const MAX_KEY_SPAN = 8
-/** Telemetry runs are ~45 requests each: keep them from starving the base backfill. */
-const MAX_TELEMETRY = 2
+/**
+ * Telemetry runs are ~45 requests each, mostly waiting on OpenF1: run several at once, but keep
+ * a slot free for the base data of a session that just finished.
+ */
+const MAX_TELEMETRY = MAX_BACKGROUND - 1
+/** Telemetry jobs run by the local helper, on top of the production ones (its own IP, its own OpenF1 quota). */
+const MAX_LOCAL_TELEMETRY = 4
+
+const runner = (env: Env): Runner => (env.RUNNER === 'local' ? 'local' : 'prod')
 
 const currentYear = () => new Date().getUTCFullYear()
 
@@ -46,13 +53,15 @@ export async function requestIngestion(env: Env, row: SessionRow): Promise<boole
 
 export async function requestTelemetry(env: Env, row: SessionRow): Promise<boolean> {
   if (!row.version || row.kind === 'testing') return false
-  if (!(await claimTelemetry(env.DB, row.session_key))) return false
+  if (!(await claimTelemetry(env.DB, row.session_key, runner(env)))) return false
   await startWorkflow(env, { sessionKey: row.session_key, pass: row.ingest_pass === 2 ? 2 : 1, telemetry: true, telemetryOnly: true, priority: 'high' })
   return true
 }
 
 /** Every 10 minutes: keep the current calendar fresh and ingest whatever just finished. */
 export async function tick(env: Env) {
+  // the local helper only lends a hand with the telemetry backlog; the calendar stays production's job
+  if (runner(env) === 'local') return pump(env)
   const up: Upstream = { env, priority: 'low' }
   const year = currentYear()
   const first = Number(env.FIRST_SEASON)
@@ -83,7 +92,8 @@ export async function tick(env: Env) {
  * gate rather than at the cron cadence.
  */
 export async function pump(env: Env) {
-  let slots = MAX_BACKGROUND - (await countQueued(env.DB))
+  if (runner(env) === 'local') return pumpTelemetry(env, MAX_LOCAL_TELEMETRY - (await countQueued(env.DB, 'local')))
+  let slots = MAX_BACKGROUND - (await countQueued(env.DB, 'prod'))
   if (slots <= 0) return
   const candidates = await ingestCandidates(env.DB, 60)
   const meetings = new Map<number, typeof candidates>()
@@ -129,8 +139,13 @@ export async function pump(env: Env) {
     })
   }
   if (slots <= 0 || (await ingestCandidates(env.DB, 1)).length) return
-  for (const row of await telemetryCandidates(env.DB, Math.min(slots, MAX_TELEMETRY))) {
-    if (!(await claimTelemetry(env.DB, row.session_key))) continue
+  await pumpTelemetry(env, Math.min(slots, MAX_TELEMETRY))
+}
+
+async function pumpTelemetry(env: Env, slots: number) {
+  if (slots <= 0) return
+  for (const row of await telemetryCandidates(env.DB, slots)) {
+    if (!(await claimTelemetry(env.DB, row.session_key, runner(env)))) continue
     await startWorkflow(env, { sessionKey: row.session_key, pass: row.ingest_pass === 2 ? 2 : 1, telemetry: true, telemetryOnly: true, priority: 'low' })
   }
 }

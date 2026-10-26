@@ -199,14 +199,22 @@ export async function claimSession(db: D1Database, key: number, staleAfterMs = 3
   return res.meta.changes > 0
 }
 
-export async function claimTelemetry(db: D1Database, key: number, staleAfterMs = 2 * 60 * 60 * 1000): Promise<boolean> {
-  const staleBefore = new Date(Date.now() - staleAfterMs).toISOString()
+/** A telemetry run can take a while when the upstream throttles: give it time before calling it stale. */
+const TELEMETRY_STALE_MS = 2 * 60 * 60 * 1000
+
+/** Who runs a telemetry job: the production Worker, or the local helper (`npm run backfill:local`). */
+export type Runner = 'prod' | 'local'
+
+export async function claimTelemetry(db: D1Database, key: number, runner: Runner): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - TELEMETRY_STALE_MS).toISOString()
+  const at = now()
   const res = await db
     .prepare(
-      `UPDATE sessions SET telemetry_state = 'queued', updated_at = ?1
-       WHERE session_key = ?2 AND telemetry_state != 'done' AND (telemetry_state != 'queued' OR updated_at < ?3)`,
+      `UPDATE sessions SET telemetry_state = 'queued', telemetry_runner = ?4, telemetry_claimed_at = ?1, updated_at = ?1
+       WHERE session_key = ?2 AND telemetry_state != 'done'
+         AND (telemetry_state != 'queued' OR COALESCE(telemetry_claimed_at, updated_at) < ?3)`,
     )
-    .bind(now(), key, staleBefore)
+    .bind(at, key, staleBefore, runner)
     .run()
   return res.meta.changes > 0
 }
@@ -258,32 +266,35 @@ export async function ingestCandidates(db: D1Database, limit: number, at = Date.
   return results
 }
 
-export async function countQueued(db: D1Database): Promise<number> {
+/** Running background jobs of one runner (the local helper only runs telemetry). */
+export async function countQueued(db: D1Database, runner: Runner): Promise<number> {
   const staleQueue = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  // a telemetry run can take a while when the upstream throttles: give it more time before calling it stale
-  const staleTelemetry = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const staleTelemetry = new Date(Date.now() - TELEMETRY_STALE_MS).toISOString()
   const row = await db
     // one slot per running batch (sessions claimed together share their queued_at) plus one per telemetry job
     .prepare(`SELECT
-         COUNT(DISTINCT CASE WHEN ingest_state = 'queued' AND queued_at >= ?1 THEN queued_at END)
-       + COUNT(CASE WHEN telemetry_state = 'queued' AND updated_at >= ?2 THEN 1 END) AS n
+         CASE WHEN ?3 = 'prod' THEN COUNT(DISTINCT CASE WHEN ingest_state = 'queued' AND queued_at >= ?1 THEN queued_at END) ELSE 0 END
+       + COUNT(CASE WHEN telemetry_state = 'queued' AND COALESCE(telemetry_runner, 'prod') = ?3
+                     AND COALESCE(telemetry_claimed_at, updated_at) >= ?2 THEN 1 END) AS n
        FROM sessions`)
-    .bind(staleQueue, staleTelemetry)
+    .bind(staleQueue, staleTelemetry, runner)
     .first<{ n: number }>()
   return row?.n ?? 0
 }
 
 /** Ingested sessions still missing telemetry, most interesting first (races, then qualifying), newest first. */
 export async function telemetryCandidates(db: D1Database, limit: number): Promise<SessionRow[]> {
+  const staleBefore = new Date(Date.now() - TELEMETRY_STALE_MS).toISOString()
   const { results } = await db
     .prepare(
       `SELECT * FROM sessions
-       WHERE version IS NOT NULL AND telemetry_version IS NULL AND telemetry_state IN ('none', 'error') AND kind != 'testing'
+       WHERE version IS NOT NULL AND telemetry_version IS NULL AND kind != 'testing'
+         AND (telemetry_state IN ('none', 'error') OR (telemetry_state = 'queued' AND COALESCE(telemetry_claimed_at, updated_at) < ?2))
        ORDER BY CASE kind WHEN 'race' THEN 0 WHEN 'qualifying' THEN 1 WHEN 'sprint' THEN 2 WHEN 'sprint_qualifying' THEN 3 ELSE 4 END,
                 date_end DESC
        LIMIT ?1`,
     )
-    .bind(limit)
+    .bind(limit, staleBefore)
     .all<SessionRow>()
   return results
 }

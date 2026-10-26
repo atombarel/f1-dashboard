@@ -23,7 +23,9 @@
     "OPENF1_BASE": "https://api.openf1.org/v1",
     "JOLPICA_BASE": "https://api.jolpi.ca/ergast/f1",
     // Oldest season OpenF1 covers; backfill never goes further back.
-    "FIRST_SEASON": "2023"
+    "FIRST_SEASON": "2023",
+    // "local" for the backfill helper below, which only runs telemetry jobs.
+    "RUNNER": "prod"
   },
 
   "d1_databases": [
@@ -58,7 +60,8 @@
       "vars": {
         "OPENF1_BASE": "https://api.openf1.org/v1",
         "JOLPICA_BASE": "https://api.jolpi.ca/ergast/f1",
-        "FIRST_SEASON": "2023"
+        "FIRST_SEASON": "2023",
+        "RUNNER": "prod"
       },
       "d1_databases": [
         { "binding": "DB", "database_name": "f1-api-cache-db", "database_id": "6987f960-070c-4d07-b6ed-1cbdf937e7f0", "migrations_dir": "migrations" }
@@ -71,6 +74,31 @@
       "workflows": [
         { "name": "f1-ingest-session", "binding": "INGEST", "class_name": "IngestSessionWorkflow", "script_name": "f1-dashboard" },
         { "name": "f1-ingest-meeting", "binding": "INGEST_MEETING", "class_name": "IngestMeetingWorkflow", "script_name": "f1-dashboard" }
+      ],
+      "triggers": { "crons": [] }
+    },
+
+    // Local backfill helper (`npm run backfill:local`, never deployed): the Worker runs on this machine against the
+    // production D1/R2, with its own gate and workflows, so OpenF1 sees another IP and another quota. It only
+    // takes telemetry jobs; sessions are claimed atomically in D1, so it never duplicates production's work.
+    "backfill": {
+      "routes": [],
+      "vars": {
+        "OPENF1_BASE": "https://api.openf1.org/v1",
+        "JOLPICA_BASE": "https://api.jolpi.ca/ergast/f1",
+        "FIRST_SEASON": "2023",
+        "RUNNER": "local"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "f1-api-cache-db", "database_id": "6987f960-070c-4d07-b6ed-1cbdf937e7f0", "migrations_dir": "migrations", "remote": true }
+      ],
+      "r2_buckets": [{ "binding": "BUNDLES", "bucket_name": "f1-bundles", "remote": true }],
+      "durable_objects": {
+        "bindings": [{ "name": "GATE", "class_name": "UpstreamGate" }]
+      },
+      "workflows": [
+        { "name": "f1-ingest-session-local", "binding": "INGEST", "class_name": "IngestSessionWorkflow" },
+        { "name": "f1-ingest-meeting-local", "binding": "INGEST_MEETING", "class_name": "IngestMeetingWorkflow" }
       ],
       "triggers": { "crons": [] }
     }
