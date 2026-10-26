@@ -165,11 +165,11 @@ function Scene({
   const outside = cars.filter((c) => !c.inside && c.f.d < anchor).sort((a, b) => a.f.order - b.f.order)
 
   // chips: greedy placement, preferred side given by the lane, further rows / sideways when taken.
-  // When the pack is too tight, only the top three keep a chip regardless (the tower lists everyone).
+  // When the pack is too tight to fit them all, only the top three keep one regardless (the tower lists everyone).
   const placed: { x: number; y: number }[] = []
   const reach = 2.4 * carK
-  const free = (x: number, y: number) =>
-    !placed.some((p) => Math.abs(p.x - x) < CHIP_W + 4 && Math.abs(p.y - y) < CHIP_H + 4) &&
+  const clearOfChips = (x: number, y: number) => !placed.some((p) => Math.abs(p.x - x) < CHIP_W + 4 && Math.abs(p.y - y) < CHIP_H + 4)
+  const clearOfCars = (x: number, y: number) =>
     !shown.some((c) => c.sx > x - reach && c.sx < x + CHIP_W + reach && c.sy > y - reach && c.sy < y + CHIP_H + reach)
   const chips = [...shown]
     .sort((a, b) => a.f.car.rank - b.f.car.rank)
@@ -178,7 +178,7 @@ function Scene({
       const out = (vertical ? CHIP_W : CHIP_H) + 6
       const base = 1.2 * carK + out / 2 + 4
       const candidates: { x: number; y: number }[] = []
-      for (let row = 0; row < 3; row++)
+      for (let row = 0; row < 4; row++)
         for (const sign of [pref, -pref])
           for (const slide of [0, 0.6, -0.6]) {
             const off = sign * (base + row * out)
@@ -189,7 +189,11 @@ function Scene({
               y: Math.max(HUD_H, Math.min(height - CHIP_H - 4, cy - CHIP_H / 2)),
             })
           }
-      const pos = candidates.find((p) => free(p.x, p.y)) ?? (c.f.car.rank < 3 ? candidates[0] : null)
+      // best: covers neither a chip nor a car; then: may cover a car; the top three always get one
+      const pos =
+        candidates.find((p) => clearOfChips(p.x, p.y) && clearOfCars(p.x, p.y)) ??
+        candidates.find((p) => clearOfChips(p.x, p.y)) ??
+        (c.f.car.rank < 3 ? candidates[0] : null)
       if (!pos) return []
       placed.push(pos)
       return [{ c, ...pos }]
