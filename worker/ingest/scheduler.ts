@@ -8,15 +8,15 @@ import type { IngestParams } from './workflow'
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 /** Concurrent background workflows. User-triggered ones bypass this. */
-const MAX_BACKGROUND = 5
+const MAX_BACKGROUND = 3
 /** Weekends fetched together by one backfill run. */
 const MEETINGS_PER_BATCH = 6
 const MAX_KEY_SPAN = 8
 /**
- * Telemetry runs are ~45 requests each, mostly waiting on OpenF1: run several at once, but keep
- * a slot free for the base data of a session that just finished.
+ * Telemetry runs are ~45 requests each. OpenF1 throttles the Worker's IPs to a couple of large requests a
+ * minute whatever the concurrency, so more jobs only make each one wait longer (4 hit the 10 min step timeout).
  */
-const MAX_TELEMETRY = MAX_BACKGROUND - 1
+const MAX_TELEMETRY = 2
 /** Telemetry jobs run by the local helper, on top of the production ones (its own IP, its own OpenF1 quota). */
 const MAX_LOCAL_TELEMETRY = 4
 
