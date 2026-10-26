@@ -70,7 +70,7 @@ npx wrangler secret put ADMIN_TOKEN       # optionnel : sans lui les endpoints /
 Ensuite chaque push sur `main` lance `.github/workflows/ci.yml` : typecheck, tests, build, migrations D1, déploiement.
 Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Workflows) et `CLOUDFLARE_ACCOUNT_ID`.
 
-Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` dans `wrangler.jsonc`, nécessaire aussi
+Le site est servi sur **https://f1raceview.com** (l'ancien domaine `f1-api.edge-mega.com` reste branché ; routes `custom_domain` dans `wrangler.jsonc`, nécessaires aussi
 pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
 `f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
 
