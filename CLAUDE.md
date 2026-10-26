@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Pit/Wall: F1 analysis site, one Cloudflare Worker (Hono API under `/api`, SPA as static assets). See README.md for the architecture.
+F1 RaceView: F1 analysis site, one Cloudflare Worker (Hono API under `/api`, SPA as static assets). See README.md for the architecture.
 
 ## Commands
 - `npm run dev` — Vite + Cloudflare plugin, runs the Worker, D1, R2, Durable Object and Workflows locally on :5173
@@ -20,4 +20,4 @@ Pit/Wall: F1 analysis site, one Cloudflare Worker (Hono API under `/api`, SPA as
 - Never call OpenF1/Jolpica from the browser or from a request path without the gate.
 - Anything stored under a version (`bundles/`, `tel/`, `replay/`) is immutable: change the content → new hash/version.
 - Bump `schema` in the bundle type and re-ingest when changing the bundle shape.
-- UI copy is French.
+- UI copy is bilingual (French source, English translation): every user-visible string goes through `t()` from `src/i18n`, one `{ fr, en }` messages file per area in `src/i18n/messages/` (typecheck fails if `en` misses a key). Never call `t()` at module top level.

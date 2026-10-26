@@ -4,6 +4,8 @@ import { scaleLinear } from 'd3-scale'
 import { useMemo, useState } from 'react'
 import { AxisX, ChartFrame, GridY, Tooltip } from '@/charts/core'
 import { DriverTag, EmptyState, Panel, SectionTitle, Segmented, TyreBadge } from '@/components/ui'
+import { t } from '@/i18n'
+import { tyreLabel } from '@/i18n/helpers'
 import { onDark, TYRE } from '@/lib/colors'
 import { lapTime } from '@/lib/format'
 import { cleanLapFilter, linearFit, stintsByDriver, TableHead, td, th } from './helpers'
@@ -19,7 +21,7 @@ function StintTimeline({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>
   const maxLap = Math.max(bundle.totalLaps, ...bundle.stints.map((s) => s.lapEnd), 1)
   const rows = ordered.filter((d) => stints.has(d.number))
   const ticks = scaleLinear().domain([0, maxLap]).ticks(Math.min(10, maxLap))
-  if (!rows.length) return <EmptyState title="Pas de données pneus" />
+  if (!rows.length) return <EmptyState title={t('strategy.noTyreData')} />
 
   return (
     <Panel className="p-3 sm:p-5">
@@ -56,7 +58,7 @@ function StintTimeline({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>
                       width: `calc(${width}% - 2px)`,
                       background: used ? `repeating-linear-gradient(135deg, transparent 0 7px, rgb(0 0 0 / 0.28) 7px 9px), ${color}` : color,
                     }}
-                    title={`${TYRE[s.compound].label}${used ? ` (usé, ${s.tyreAge} tours)` : ' (neuf)'} · tours ${s.lapStart}–${s.lapEnd}${pit ? ` · stand ${pit.lane?.toFixed(1) ?? '?'} s` : ''}`}
+                    title={`${tyreLabel(s.compound)} (${used ? t('strategy.used', { count: s.tyreAge }) : t('strategy.new')}) · ${t('strategy.lapRange', { a: s.lapStart, b: s.lapEnd })}${pit ? ` · ${t('strategy.pitLane', { s: pit.lane?.toFixed(1) ?? '?' })}` : ''}`}
                   >
                     <span className="tnum whitespace-nowrap text-[10px] font-semibold text-ink/80">
                       {width > 7 ? `${TYRE[s.compound].short} ${s.lapEnd - s.lapStart + 1}` : ''}
@@ -73,11 +75,11 @@ function StintTimeline({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>
           .filter((c) => bundle.stints.some((s) => s.compound === c))
           .map((c) => (
             <span key={c} className="flex items-center gap-1.5">
-              <TyreBadge compound={c} size={14} /> {TYRE[c].label}
+              <TyreBadge compound={c} size={14} /> {tyreLabel(c)}
             </span>
           ))}
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-5" style={{ background: 'repeating-linear-gradient(135deg, transparent 0 4px, rgb(0 0 0 / 0.35) 4px 6px), var(--color-muted)' }} /> pneu déjà utilisé
+          <span className="h-3 w-5" style={{ background: 'repeating-linear-gradient(135deg, transparent 0 4px, rgb(0 0 0 / 0.35) 4px 6px), var(--color-muted)' }} /> {t('strategy.usedTyre')}
         </span>
       </div>
     </Panel>
@@ -94,7 +96,7 @@ function PitTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
         .sort((a, b) => (hasStop ? (a.stop ?? 99) - (b.stop ?? 99) : (a.lane ?? 99) - (b.lane ?? 99))),
     [bundle, hasStop],
   )
-  if (!rows.length) return <EmptyState title="Aucun arrêt au stand" />
+  if (!rows.length) return <EmptyState title={t('strategy.noPitStops')} />
   const best = hasStop ? rows[0].stop! : rows[0].lane!
   const worst = Math.max(...rows.map((r) => (hasStop ? r.stop! : r.lane!)))
   return (
@@ -103,11 +105,11 @@ function PitTable({ bundle, drivers }: Pick<TabProps, 'bundle' | 'drivers'>) {
         <TableHead>
           <tr className="border-b border-line">
             <th className={clsx(th, 'text-right')}>#</th>
-            <th className={th}>Pilote</th>
-            <th className={clsx(th, 'text-right')}>Tour</th>
-            {hasStop && <th className={clsx(th, 'text-right')}>Immobilisation</th>}
-            <th className={clsx(th, 'text-right')}>Voie des stands</th>
-            <th className={th}>Changement</th>
+            <th className={th}>{t('strategy.driver')}</th>
+            <th className={clsx(th, 'text-right')}>{t('strategy.lap')}</th>
+            {hasStop && <th className={clsx(th, 'text-right')}>{t('strategy.stationary')}</th>}
+            <th className={clsx(th, 'text-right')}>{t('strategy.pitLaneCol')}</th>
+            <th className={th}>{t('strategy.change')}</th>
             <th className={clsx(th, 'hidden w-1/4 sm:table-cell')} />
           </tr>
         </TableHead>
@@ -178,7 +180,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
       }),
     [points],
   )
-  if (points.length < 10) return <EmptyState title="Pas assez de tours réguliers" />
+  if (points.length < 10) return <EmptyState title={t('strategy.notEnoughLaps')} />
   const ts = points.map((p) => p.t)
   const lo = Math.min(...ts)
   const hi = Math.max(...ts)
@@ -190,7 +192,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
         <Segmented
           value={only}
           onChange={setOnly}
-          items={[{ value: 'ALL' as const, label: 'Tous' }, ...compounds.map((c) => ({ value: c, label: TYRE[c].label }))]}
+          items={[{ value: 'ALL' as const, label: t('strategy.all') }, ...compounds.map((c) => ({ value: c, label: tyreLabel(c) }))]}
         />
         <div className="flex flex-wrap gap-4 text-xs">
           {fits.map(({ c, fit, n }) =>
@@ -199,7 +201,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
                 <TyreBadge compound={c} size={14} />
                 <span className="tnum" style={{ color: TYRE[c].color }}>
                   {fit.b >= 0 ? '+' : '−'}
-                  {Math.abs(fit.b).toFixed(3)} s/tour
+                  {Math.abs(fit.b).toFixed(3)} {t('strategy.perLap')}
                 </span>
                 <span className="text-dim">({n})</span>
               </span>
@@ -209,7 +211,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
       </div>
       <ChartFrame
         height={360}
-        ariaLabel="Temps au tour selon l’âge du pneu"
+        ariaLabel={t('strategy.lapTimeByAge')}
         overlay={({ width, height }) => {
           if (!hover) return null
           const x = scaleLinear().domain([0, maxAge]).range([0, width])
@@ -224,7 +226,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
                 </span>
                 <span className="tnum">{lapTime(hover.t)}</span>
               </div>
-              <div className="mt-1 text-dim">Pneu de {hover.age} tours</div>
+              <div className="mt-1 text-dim">{t('strategy.tyreAge', { count: hover.age })}</div>
             </Tooltip>
           )
         }}
@@ -235,7 +237,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
           return (
             <>
               <GridY scale={y} width={width} ticks={6} format={(v) => lapTime(v, 1)} />
-              <AxisX scale={x} height={height} ticks={Math.max(4, Math.floor(width / 60))} label="Âge du pneu (tours)" />
+              <AxisX scale={x} height={height} ticks={Math.max(4, Math.floor(width / 60))} label={t('strategy.tyreAgeAxis')} />
               {shown.map((p, i) => (
                 <circle
                   key={i}
@@ -258,7 +260,7 @@ function Degradation({ bundle, drivers }: { bundle: SessionBundle; drivers: Map<
         }}
       </ChartFrame>
       <p className="mt-2 text-[11px] text-dim">
-        Tours réguliers de tous les pilotes. La pente mélange usure des pneus et allègement en carburant : une pente négative signifie que l’allègement l’emporte.
+        {t('strategy.degradationNote')}
       </p>
     </Panel>
   )
@@ -269,16 +271,16 @@ export default function Strategy({ bundle, drivers, ordered }: TabProps) {
   return (
     <div className="space-y-10">
       <section>
-        <SectionTitle index="01" title="Relais pneus" aside={`${bundle.stints.length} relais · ${totalStops} passages aux stands`} />
+        <SectionTitle index="01" title={t('strategy.stintsTitle')} aside={`${t('strategy.stints', { count: bundle.stints.length })} · ${t('strategy.stops', { count: totalStops })}`} />
         <StintTimeline bundle={bundle} ordered={ordered} />
       </section>
       <div className="grid gap-10 xl:grid-cols-2">
         <section className="min-w-0">
-          <SectionTitle index="02" title="Arrêts aux stands" aside={bundle.pits.some((p) => p.stop !== null) ? 'Classés par temps d’immobilisation' : 'Classés par temps dans la voie des stands'} />
+          <SectionTitle index="02" title={t('strategy.pitStopsTitle')} aside={bundle.pits.some((p) => p.stop !== null) ? t('strategy.sortedByStop') : t('strategy.sortedByLane')} />
           <PitTable bundle={bundle} drivers={drivers} />
         </section>
         <section className="min-w-0">
-          <SectionTitle index="03" title="Dégradation" aside="Temps au tour selon l’âge du pneu" />
+          <SectionTitle index="03" title={t('strategy.degradation')} aside={t('strategy.lapTimeByAge')} />
           <Degradation bundle={bundle} drivers={drivers} />
         </section>
       </div>

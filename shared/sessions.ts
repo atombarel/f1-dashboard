@@ -23,17 +23,3 @@ export function timeStatus(dateStart: string, dateEnd: string, now = Date.now())
   if (now < end + LIVE_GRACE_MS) return 'live'
   return 'processing'
 }
-
-export const SESSION_SHORT: Record<string, string> = {
-  'Practice 1': 'FP1',
-  'Practice 2': 'FP2',
-  'Practice 3': 'FP3',
-  Qualifying: 'Q',
-  'Sprint Qualifying': 'SQ',
-  'Sprint Shootout': 'SQ',
-  Sprint: 'Sprint',
-  Race: 'Course',
-  'Day 1': 'J1',
-  'Day 2': 'J2',
-  'Day 3': 'J3',
-}

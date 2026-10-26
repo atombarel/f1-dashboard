@@ -6,6 +6,7 @@ import { readStandings, refreshStandings } from './ingest/standings'
 import { getMeeting, getSeasonMeetings, getSessionRow, listYears, MAX_ATTEMPTS, toSessionSummary, type SessionRow } from './lib/db'
 import { edgeCache, IMMUTABLE, json, NO_STORE, r2Gzip, shortLived } from './lib/http'
 import { keys } from './lib/store'
+import { gate } from './upstream/openf1'
 
 export { UpstreamGate } from './upstream/gate'
 export { IngestSessionWorkflow } from './ingest/workflow'
@@ -210,8 +211,8 @@ admin.get('/status', async (c) => {
   const errors = await c.env.DB.prepare(
     `SELECT session_key, name, year, ingest_error, ingest_attempts FROM sessions WHERE ingest_state = 'error' ORDER BY date_end DESC LIMIT 20`,
   ).all()
-  const gate = await c.env.GATE.get(c.env.GATE.idFromName('openf1')).queueDepth()
-  return c.json({ states: results, errors: errors.results, openf1Queue: gate })
+  const openf1Queue = await gate(c.env, 'openf1').queueDepth()
+  return c.json({ states: results, errors: errors.results, openf1Queue })
 })
 app.route('/admin', admin)
 

@@ -2,6 +2,8 @@ import type { Compound, Driver, SessionStatus } from '@shared/types'
 import { Link, useRouter, type ErrorComponentProps } from '@tanstack/react-router'
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
+import { t } from '@/i18n'
+import { tyreLabel } from '@/i18n/helpers'
 import { onDark, TYRE } from '@/lib/colors'
 
 export function PageHeader({ eyebrow, title, children, aside }: { eyebrow?: ReactNode; title: ReactNode; children?: ReactNode; aside?: ReactNode }) {
@@ -49,7 +51,7 @@ export function Stat({ label, value, sub, accent }: { label: ReactNode; value: R
 }
 
 /** Five red lights, one after the other: the loading state of the whole app. */
-export function StartLights({ label = 'Chargement' }: { label?: string }) {
+export function StartLights({ label = t('ui.loading') }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-16" role="status" aria-live="polite">
       <div className="flex gap-2.5 rounded-sm border border-line bg-carbon px-4 py-3">
@@ -86,11 +88,11 @@ export function EmptyState({ title, children, icon }: { title: ReactNode; childr
 
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
   return (
-    <EmptyState title="Drapeau rouge">
-      <p>{error instanceof Error ? error.message : 'Une erreur est survenue.'}</p>
+    <EmptyState title={t('ui.errorTitle')}>
+      <p>{error instanceof Error ? error.message : t('ui.errorFallback')}</p>
       {retry && (
         <button onClick={retry} className="mt-4 border border-line-2 px-4 py-2 text-xs uppercase tracking-widest hover:border-signal hover:text-signal">
-          Réessayer
+          {t('ui.retry')}
         </button>
       )}
     </EmptyState>
@@ -112,21 +114,21 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
 
 export function NotFound() {
   return (
-    <EmptyState title="Hors piste">
-      Cette page n’existe pas.{' '}
+    <EmptyState title={t('ui.notFoundTitle')}>
+      {t('ui.notFoundBody')}{' '}
       <Link to="/" className="text-signal link-underline">
-        Retour au stand
+        {t('ui.notFoundBack')}
       </Link>
     </EmptyState>
   )
 }
 
-const STATUS: Record<SessionStatus, { label: string; className: string; dot?: boolean }> = {
-  upcoming: { label: 'À venir', className: 'text-muted border-line-2' },
-  live: { label: 'En cours', className: 'text-signal border-signal/60 bg-signal-soft', dot: true },
-  processing: { label: 'Traitement', className: 'text-amber border-amber/40' },
-  final: { label: 'Terminée', className: 'text-paper/80 border-line-2' },
-  cancelled: { label: 'Annulée', className: 'text-dim border-line line-through' },
+const STATUS: Record<SessionStatus, { className: string; dot?: boolean }> = {
+  upcoming: { className: 'text-muted border-line-2' },
+  live: { className: 'text-signal border-signal/60 bg-signal-soft', dot: true },
+  processing: { className: 'text-amber border-amber/40' },
+  final: { className: 'text-paper/80 border-line-2' },
+  cancelled: { className: 'text-dim border-line line-through' },
 }
 
 export function StatusPill({ status, className }: { status: SessionStatus; className?: string }) {
@@ -134,7 +136,7 @@ export function StatusPill({ status, className }: { status: SessionStatus; class
   return (
     <span className={clsx('inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em]', s.className, className)}>
       {s.dot && <span className="animate-pulse-dot size-1.5 rounded-full bg-signal" />}
-      {s.label}
+      {t(`status.${status}`)}
     </span>
   )
 }
@@ -159,20 +161,20 @@ export function DriverTag({ driver, size = 'md', showTeam }: { driver: Pick<Driv
 }
 
 export function TyreBadge({ compound, size = 18, age }: { compound: Compound; size?: number; age?: number }) {
-  const t = TYRE[compound]
+  const tyre = TYRE[compound]
   return (
-    <span className="inline-flex items-center gap-1" title={`${t.label}${age ? ` · ${age} tours à l’origine` : ''}`}>
+    <span className="inline-flex items-center gap-1" title={`${tyreLabel(compound)}${age ? ` · ${t('ui.tyreAge', { count: age })}` : ''}`}>
       <span
         className="inline-flex items-center justify-center rounded-full font-mono font-bold text-ink"
         style={{
           width: size,
           height: size,
           fontSize: size * 0.5,
-          background: `radial-gradient(circle, var(--color-carbon) 0 38%, ${t.color} 40% 100%)`,
-          color: t.color,
+          background: `radial-gradient(circle, var(--color-carbon) 0 38%, ${tyre.color} 40% 100%)`,
+          color: tyre.color,
         }}
       >
-        {t.short}
+        {tyre.short}
       </span>
     </span>
   )

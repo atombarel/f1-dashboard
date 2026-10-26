@@ -6,6 +6,8 @@ import clsx from 'clsx'
 import { lazy, Suspense, useMemo } from 'react'
 import { ErrorState, Flag, PageHeader, StartLights, StatusPill } from '@/components/ui'
 import { bundleQuery, sessionMetaQuery } from '@/lib/api'
+import { t } from '@/i18n'
+import { sessionName } from '@/i18n/helpers'
 import { dayDate, clock, localClock } from '@/lib/format'
 import { sessionRoute, type SessionTab } from '@/router'
 import type { TabProps } from '@/features/session/types'
@@ -17,16 +19,6 @@ const Strategy = lazy(() => import('@/features/session/Strategy'))
 const Control = lazy(() => import('@/features/session/Control'))
 const Telemetry = lazy(() => import('@/features/telemetry/Telemetry'))
 const Replay = lazy(() => import('@/features/telemetry/Replay'))
-
-const TAB_LABELS: Record<SessionTab, string> = {
-  results: 'Classement',
-  laps: 'Tours',
-  race: 'Course',
-  strategy: 'Stratégie',
-  telemetry: 'Télémétrie',
-  replay: 'Replay',
-  control: 'Direction de course',
-}
 
 export function SessionPage() {
   const { sessionKey } = sessionRoute.useParams()
@@ -75,11 +67,11 @@ export function SessionPage() {
       eyebrow={
         <>
           <Link to="/saison/$year" params={{ year: meeting.year }} className="link-underline hover:text-paper">
-            Saison {meeting.year}
+            {t('season.label', { year: meeting.year })}
           </Link>
           <span className="text-dim">/</span>
           <Link to="/gp/$meetingKey" params={{ meetingKey: meeting.key }} className="link-underline hover:text-paper">
-            {meeting.round ? `Manche ${meeting.round}` : meeting.name}
+            {meeting.round ? t('season.round', { n: meeting.round }) : meeting.name}
           </Link>
           <StatusPill status={session.status} className="ml-2" />
         </>
@@ -87,17 +79,17 @@ export function SessionPage() {
       title={
         <span className="flex flex-wrap items-baseline gap-x-4">
           <span>{meeting.name.replace('Grand Prix', 'GP')}</span>
-          <span className="text-signal">{session.name}</span>
+          <span className="text-signal">{sessionName(session.name)}</span>
         </span>
       }
       aside={
         <div className="flex items-center gap-4 text-right">
           <div>
-            <div className="eyebrow">Départ</div>
+            <div className="eyebrow">{t('session.start')}</div>
             <div className="tnum text-sm text-paper">
               {dayDate(session.dateStart)} · {clock(session.dateStart)}
             </div>
-            <div className="tnum text-[11px] text-dim">{localClock(session.dateStart, meeting.gmtOffset)} heure locale</div>
+            <div className="tnum text-[11px] text-dim">{t('session.localTime', { time: localClock(session.dateStart, meeting.gmtOffset) })}</div>
           </div>
           <Flag src={meeting.countryFlag} alt={meeting.countryName} className="h-10 border border-line" />
         </div>
@@ -112,21 +104,21 @@ export function SessionPage() {
       <>
         {header}
         {session.status === 'upcoming' ? (
-          <Pending title="Pas encore commencée" text="Les données apparaîtront ici quelques minutes après le drapeau à damier." />
+          <Pending title={t('session.notStartedTitle')} text={t('session.notStartedText')} />
         ) : session.status === 'live' ? (
-          <Pending live title="Session en cours" text="Les données complètes sont publiées peu après la fin de la session. Cette page se met à jour toute seule." />
+          <Pending live title={t('session.liveTitle')} text={t('session.liveText')} />
         ) : meta.data.unavailable ? (
-          <Pending title="Données indisponibles" text="OpenF1 n’a pas publié les données de cette session. Nouvel essai automatique dans quelques jours." />
+          <Pending title={t('session.unavailableTitle')} text={t('session.unavailableText')} />
         ) : session.status === 'cancelled' ? (
-          <Pending title="Session annulée" text="Aucune donnée pour cette session." />
+          <Pending title={t('session.cancelledTitle')} text={t('session.cancelledText')} />
         ) : (
-          <Pending live title="Récupération des données" text="On télécharge les tours, les pneus, les classements et la télémétrie. Quelques secondes…" />
+          <Pending live title={t('session.fetchingTitle')} text={t('session.fetchingText')} />
         )}
       </>
     )
   }
 
-  if (bundle.isPending || !derived) return (<>{header}<StartLights label="Chargement de la session" /></>)
+  if (bundle.isPending || !derived) return (<>{header}<StartLights label={t('session.loading')} /></>)
   if (bundle.isError) return (<>{header}<ErrorState error={bundle.error} retry={() => bundle.refetch()} /></>)
 
   const props: TabProps = { meta: meta.data, bundle: bundle.data, drivers: derived.drivers, ordered: derived.ordered, selected, setSelected }
@@ -134,23 +126,23 @@ export function SessionPage() {
   return (
     <>
       {header}
-      <nav className="sticky top-14 z-40 -mx-4 mb-8 overflow-x-auto border-b border-line bg-ink/85 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6">
+      <nav className="scroll-strip sticky top-14 z-40 -mx-4 mb-8 border-b border-line bg-ink/85 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6">
         <div className="flex">
-          {tabs.map((t, i) => (
+          {tabs.map((id, i) => (
             <Link
-              key={t}
+              key={id}
               from={sessionRoute.fullPath}
-              search={(s) => ({ ...s, tab: t === 'results' ? undefined : t })}
+              search={(s) => ({ ...s, tab: id === 'results' ? undefined : id })}
               resetScroll={false}
               className={clsx(
                 'relative flex items-baseline gap-2 whitespace-nowrap px-4 py-3.5 font-mono text-[11px] uppercase tracking-[0.14em] transition-colors',
-                t === tab ? 'text-paper' : 'text-muted hover:text-paper',
+                id === tab ? 'text-paper' : 'text-muted hover:text-paper',
               )}
             >
               <span className="text-[9px] text-dim">{String(i + 1).padStart(2, '0')}</span>
-              {TAB_LABELS[t]}
-              {t === 'telemetry' && !meta.data.telemetryUrl && <span className="animate-pulse-dot size-1 rounded-full bg-amber" title="En cours de traitement" />}
-              {t === tab && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-signal" />}
+              {t(`session.tabs.${id}`)}
+              {id === 'telemetry' && !meta.data.telemetryUrl && <span className="animate-pulse-dot size-1 rounded-full bg-amber" title={t('session.telemetryProcessing')} />}
+              {id === tab && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-signal" />}
             </Link>
           ))}
         </div>

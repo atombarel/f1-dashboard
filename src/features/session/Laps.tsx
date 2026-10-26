@@ -6,6 +6,8 @@ import { useMemo, useState } from 'react'
 import { AxisX, ChartFrame, GridY, Tooltip } from '@/charts/core'
 import { DriverPicker } from '@/components/DriverPicker'
 import { DriverTag, EmptyState, Panel, SectionTitle, Segmented, TyreBadge } from '@/components/ui'
+import { t } from '@/i18n'
+import { tyreLabel } from '@/i18n/helpers'
 import { onDark, teammateIndex, TYRE } from '@/lib/colors'
 import { delta, lapTime } from '@/lib/format'
 import { cleanLapFilter, compoundOf, linearFit, median, NeutralBands, stintsByDriver, TableHead, td, th } from './helpers'
@@ -33,7 +35,7 @@ function LapChart({ bundle, drivers, series }: { bundle: SessionBundle; drivers:
   const mates = useMemo(() => teammateIndex([...drivers.values()]), [drivers])
   const all = series.flatMap((s) => s.points)
   const maxLap = Math.max(bundle.totalLaps, ...all.map((p) => p.n), 2)
-  if (!all.length) return <EmptyState title="Aucun tour">Sélectionne des pilotes pour comparer leur rythme.</EmptyState>
+  if (!all.length) return <EmptyState title={t('laps.emptyTitle')}>{t('laps.emptyBody')}</EmptyState>
   const times = all.map((p) => p.t)
   const lo = Math.min(...times)
   const hi = Math.max(...times)
@@ -42,7 +44,7 @@ function LapChart({ bundle, drivers, series }: { bundle: SessionBundle; drivers:
   return (
     <ChartFrame
       height={420}
-      ariaLabel="Temps au tour"
+      ariaLabel={t('laps.chartAria')}
       onPointer={(p) => setHover(p ? p.x : null)}
       overlay={({ width }) => {
         if (hover === null) return null
@@ -55,7 +57,7 @@ function LapChart({ bundle, drivers, series }: { bundle: SessionBundle; drivers:
         if (!rows.length) return null
         return (
           <Tooltip x={x(lap)} width={width} top={8}>
-            <div className="eyebrow mb-1.5">Tour {lap}</div>
+            <div className="eyebrow mb-1.5">{t('laps.lapN', { lap })}</div>
             {rows.map(({ s, p }, i) => {
               const d = drivers.get(s.drv)
               return (
@@ -88,7 +90,7 @@ function LapChart({ bundle, drivers, series }: { bundle: SessionBundle; drivers:
           <>
             <NeutralBands items={bundle.neutralizations} x={x} height={height} />
             <GridY scale={y} width={width} ticks={6} format={(v) => lapTime(v, 1)} />
-            <AxisX scale={x} height={height} ticks={Math.min(Math.max(4, Math.floor(width / 70)), maxLap)} label="Tour" />
+            <AxisX scale={x} height={height} ticks={Math.min(Math.max(4, Math.floor(width / 70)), maxLap)} label={t('laps.axisLap')} />
             {series.map(({ drv, points }) => {
               const d = drivers.get(drv)
               const c = d ? onDark(d.teamColour) : '#888'
@@ -138,14 +140,14 @@ function SectorTable({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) 
       <table className="w-full border-collapse text-sm">
         <TableHead>
           <tr className="border-b border-line">
-            <th className={th}>Pilote</th>
+            <th className={th}>{t('laps.col.driver')}</th>
             <th className={clsx(th, 'text-right')}>S1</th>
             <th className={clsx(th, 'text-right')}>S2</th>
             <th className={clsx(th, 'text-right')}>S3</th>
-            <th className={clsx(th, 'text-right')}>Tour idéal</th>
-            <th className={clsx(th, 'text-right')}>Meilleur tour</th>
-            <th className={clsx(th, 'text-right')}>Perte</th>
-            <th className={clsx(th, 'text-right')}>V. max</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.idealLap')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.bestLap')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.loss')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.topSpeed')}</th>
           </tr>
         </TableHead>
         <tbody>
@@ -169,12 +171,12 @@ function SectorTable({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) 
       </table>
       <div className="flex flex-wrap gap-4 border-t border-line px-3 py-2 text-[11px] text-dim">
         <span>
-          <span className="text-purple">■</span> meilleur de la session
+          <span className="text-purple">■</span> {t('laps.legendBest')}
         </span>
         <span>
-          <span className="text-green">■</span> à moins d’un dixième
+          <span className="text-green">■</span> {t('laps.legendTenth')}
         </span>
-        <span>Perte = meilleur tour − somme des meilleurs secteurs</span>
+        <span>{t('laps.legendLoss')}</span>
       </div>
     </Panel>
   )
@@ -230,20 +232,20 @@ function Spark({ run }: { run: LongRun }) {
 
 function LongRuns({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) {
   const runs = useLongRuns(bundle, ordered)
-  if (!runs.length) return <EmptyState title="Pas de relais long">Aucun relais d’au moins 5 tours réguliers dans cette session.</EmptyState>
+  if (!runs.length) return <EmptyState title={t('laps.longRunsEmptyTitle')}>{t('laps.longRunsEmptyBody')}</EmptyState>
   const best = runs[0].avg
   return (
     <Panel flat className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <TableHead>
           <tr className="border-b border-line">
-            <th className={th}>Pilote</th>
-            <th className={th}>Pneu</th>
-            <th className={clsx(th, 'text-right')}>Tours</th>
-            <th className={clsx(th, 'text-right')}>Rythme moyen</th>
-            <th className={clsx(th, 'text-right')}>Écart</th>
-            <th className={clsx(th, 'text-right')}>Dégradation</th>
-            <th className={th}>Évolution</th>
+            <th className={th}>{t('laps.col.driver')}</th>
+            <th className={th}>{t('laps.col.tyre')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.laps')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.avgPace')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.gap')}</th>
+            <th className={clsx(th, 'text-right')}>{t('laps.col.degradation')}</th>
+            <th className={th}>{t('laps.col.trend')}</th>
           </tr>
         </TableHead>
         <tbody>
@@ -255,14 +257,14 @@ function LongRuns({ bundle, ordered }: Pick<TabProps, 'bundle' | 'ordered'>) {
               <td className={td}>
                 <span className="flex items-center gap-2">
                   <TyreBadge compound={r.compound} size={16} />
-                  <span className="text-xs text-muted">{TYRE[r.compound].label}</span>
+                  <span className="text-xs text-muted">{tyreLabel(r.compound)}</span>
                 </span>
               </td>
               <td className={clsx(td, 'tnum text-right text-muted')}>{r.laps.length}</td>
               <td className={clsx(td, 'tnum text-right', i === 0 ? 'text-purple' : 'text-paper')}>{lapTime(r.avg)}</td>
               <td className={clsx(td, 'tnum text-right text-muted')}>{i === 0 ? '' : `+${(r.avg - best).toFixed(3)}`}</td>
               <td className={clsx(td, 'tnum text-right', r.slope !== null && r.slope > 0.08 ? 'text-signal' : r.slope !== null && r.slope < 0.02 ? 'text-green' : 'text-paper/80')}>
-                {r.slope === null ? '—' : `${r.slope >= 0 ? '+' : '−'}${Math.abs(r.slope).toFixed(3)} s/tour`}
+                {r.slope === null ? '—' : t('laps.perLap', { v: `${r.slope >= 0 ? '+' : '−'}${Math.abs(r.slope).toFixed(3)}` })}
               </td>
               <td className={td}>
                 <Spark run={r} />
@@ -285,14 +287,14 @@ export default function Laps({ bundle, drivers, ordered, selected, setSelected }
       <section>
         <SectionTitle
           index="01"
-          title="Rythme tour par tour"
+          title={t('laps.paceTitle')}
           aside={
             <Segmented
               value={hideOutliers ? 'clean' : 'all'}
               onChange={(v) => setHide(v === 'clean')}
               items={[
-                { value: 'clean', label: 'Tours représentatifs', hint: 'Sans tours de stand, tour 1, neutralisations et tours > 107 % de la médiane' },
-                { value: 'all', label: 'Tous les tours' },
+                { value: 'clean', label: t('laps.clean'), hint: t('laps.cleanHint') },
+                { value: 'all', label: t('laps.all') },
               ]}
             />
           }
@@ -306,22 +308,22 @@ export default function Laps({ bundle, drivers, ordered, selected, setSelected }
               .map((c) => (
                 <span key={c} className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full" style={{ background: TYRE[c].color }} />
-                  {TYRE[c].label}
+                  {tyreLabel(c)}
                 </span>
               ))}
-            <span>Trait pointillé = second pilote de l’équipe</span>
+            <span>{t('laps.dashed')}</span>
           </div>
         </Panel>
       </section>
 
       <section>
-        <SectionTitle index="02" title="Secteurs & tour idéal" aside="Meilleurs secteurs de chaque pilote, hors tours de sortie des stands" />
+        <SectionTitle index="02" title={t('laps.sectorsTitle')} aside={t('laps.sectorsAside')} />
         <SectorTable bundle={bundle} ordered={ordered} />
       </section>
 
       {practice && (
         <section>
-          <SectionTitle index="03" title="Relais longs" aside="Simulations de course : relais d’au moins 5 tours réguliers" />
+          <SectionTitle index="03" title={t('laps.longRunsTitle')} aside={t('laps.longRunsAside')} />
           <LongRuns bundle={bundle} ordered={ordered} />
         </section>
       )}

@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { ChartFrame, useWidth, type Margin } from '@/charts/core'
 import { DriverPicker } from '@/components/DriverPicker'
 import { EmptyState, Panel, SectionTitle, StartLights, TyreBadge } from '@/components/ui'
+import { t } from '@/i18n'
 import { circuitQuery, telemetryQuery } from '@/lib/api'
 import { onDark, TYRE } from '@/lib/colors'
 import { lapTime } from '@/lib/format'
@@ -79,7 +80,7 @@ export default function Telemetry({ meta, bundle, ordered, selected, setSelected
   const driverByNumber = useMemo(() => new Map(bundle.drivers.map((d) => [d.number, d])), [bundle.drivers])
 
   if (!meta.telemetryUrl) return <TelemetryPending />
-  if (pair.length < 2) return <EmptyState title="Pas assez de pilotes">Il faut au moins deux pilotes avec des tours chronométrés.</EmptyState>
+  if (pair.length < 2) return <EmptyState title={t('telemetry.notEnoughDrivers')}>{t('telemetry.notEnoughDriversBody')}</EmptyState>
 
   const dA = driverByNumber.get(pair[0])!
   const dB = driverByNumber.get(pair[1])!
@@ -93,18 +94,18 @@ export default function Telemetry({ meta, bundle, ordered, selected, setSelected
     <div className="space-y-6">
       <Panel className="p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <div className="eyebrow">Comparer deux pilotes</div>
-          <div className="text-[11px] text-dim">Le dernier pilote choisi remplace le plus ancien</div>
+          <div className="eyebrow">{t('telemetry.compareTitle')}</div>
+          <div className="text-[11px] text-dim">{t('telemetry.compareHint')}</div>
         </div>
         <DriverPicker drivers={ordered} selected={pair} onChange={(n) => n.length && setSelected(n)} max={2} />
       </Panel>
 
       {telA.isPending || telB.isPending ? (
-        <StartLights label="Chargement de la télémétrie" />
+        <StartLights label={t('telemetry.loading')} />
       ) : telA.isError || telB.isError ? (
-        <EmptyState title="Télémétrie indisponible">
+        <EmptyState title={t('telemetry.unavailable')}>
           {((telA.error ?? telB.error) as Error)?.message === 'no telemetry for this driver'
-            ? 'Pas de données voiture pour ce pilote sur cette session.'
+            ? t('telemetry.noCarData')
             : ((telA.error ?? telB.error) as Error)?.message}
         </EmptyState>
       ) : (
@@ -170,7 +171,7 @@ function Comparison({
 
   const corners = useMemo(() => cornerDistances(layout, prepared?.a ?? null), [layout, prepared])
 
-  if (!prepared) return <EmptyState title="Aucun tour exploitable">Pas de tour chronométré avec télémétrie pour l’un des deux pilotes.</EmptyState>
+  if (!prepared) return <EmptyState title={t('telemetry.noUsableLap')}>{t('telemetry.noUsableLapBody')}</EmptyState>
   const { a, b } = prepared
 
   return (
@@ -185,7 +186,7 @@ function Comparison({
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-5">
           <div className="lg:sticky lg:top-32">
-            <SectionTitle index="T1" title="Domination" aside={`${prepared.sectors.length} mini-secteurs`} />
+            <SectionTitle index="T1" title={t('telemetry.dominance')} aside={t('telemetry.miniSectorsCount', { n: prepared.sectors.length })} />
             <Panel className="p-2">
               <TrackMap
                 layout={layout}
@@ -202,7 +203,7 @@ function Comparison({
                     <svg width="22" height="6" aria-hidden>
                       <line x1="0" x2="22" y1="3" y2="3" stroke={s.colour} strokeWidth="4" strokeDasharray={s.dashed ? '6 3' : undefined} />
                     </svg>
-                    {s.driver.acronym} plus rapide
+                    {t('telemetry.faster', { driver: s.driver.acronym })}
                   </span>
                 ))}
               </div>
@@ -210,7 +211,7 @@ function Comparison({
           </div>
         </div>
         <div className="lg:col-span-7">
-          <SectionTitle index="T2" title="Télémétrie" aside="Distance en mètres depuis la ligne" />
+          <SectionTitle index="T2" title={t('telemetry.telemetry')} aside={t('telemetry.distanceHint')} />
           <Panel className="px-1 py-3 sm:px-2">
             <Channels sides={sides} a={a} b={b} delta={prepared.delta} corners={corners} hover={hover} setHover={setHover} />
           </Panel>
@@ -261,7 +262,7 @@ function LapCard({
       </div>
       <div className="relative mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
         <label className="block">
-          <span className="eyebrow mb-1 block">Tour</span>
+          <span className="eyebrow mb-1 block">{t('telemetry.lap')}</span>
           <select
             value={lapN}
             onChange={(e) => onLap(Number(e.target.value))}
@@ -269,26 +270,26 @@ function LapCard({
           >
             {available.map((l) => {
               const c = compoundAt(stints, side.driver.number, l.n)
-              const tag = l.t === sessionFastest ? ' ◆ meilleur' : l.t === personalBest ? ' ● perso' : ''
+              const tag = l.t === sessionFastest ? ` ◆ ${t('telemetry.tagBest')}` : l.t === personalBest ? ` ● ${t('telemetry.tagPersonal')}` : ''
               return (
                 <option key={l.n} value={l.n}>
-                  {`T${String(l.n).padStart(2, '0')}  ${lapTime(l.t)}  ${c ? TYRE[c.compound].short : ''}${l.po ? '  sortie stand' : ''}${tag}`}
+                  {`${t('telemetry.lapShort', { n: String(l.n).padStart(2, '0') })}  ${lapTime(l.t)}  ${c ? TYRE[c.compound].short : ''}${l.po ? `  ${t('telemetry.outLap')}` : ''}${tag}`}
                 </option>
               )
             })}
           </select>
         </label>
         <div>
-          <div className="eyebrow mb-1">Temps</div>
+          <div className="eyebrow mb-1">{t('telemetry.time')}</div>
           <div className={clsx('tnum text-2xl', lap?.t === sessionFastest ? 'text-purple' : lap?.t === personalBest ? 'text-green' : 'text-paper')}>{lapTime(lap?.t)}</div>
         </div>
         <div>
-          <div className="eyebrow mb-1">Pneu</div>
+          <div className="eyebrow mb-1">{t('telemetry.tyre')}</div>
           <div className="flex h-8 items-center gap-2 text-sm">
             {stint ? (
               <>
                 <TyreBadge compound={stint.compound} size={22} />
-                <span className="tnum text-xs text-muted">{stint.tyreAge + (lapN - stint.lapStart)} t.</span>
+                <span className="tnum text-xs text-muted">{t('telemetry.tyreAge', { n: stint.tyreAge + (lapN - stint.lapStart) })}</span>
               </>
             ) : (
               <span className="text-dim">—</span>
@@ -296,7 +297,7 @@ function LapCard({
           </div>
         </div>
         <div>
-          <div className="eyebrow mb-1">V. max</div>
+          <div className="eyebrow mb-1">{t('telemetry.topSpeed')}</div>
           <div className="tnum text-2xl text-paper">
             {topSpeed}
             <span className="ml-1 text-xs text-dim">km/h</span>
@@ -306,8 +307,6 @@ function LapCard({
     </div>
   )
 }
-
-const CLASS_LABEL = { slow: 'virages lents · <150', medium: 'vitesse moyenne', fast: 'zones rapides · >230' } as const
 
 function Verdict({ sides, a, b, sectors }: { sides: [Side, Side]; a: PreparedLap; b: PreparedLap; sectors: MiniSector[] }) {
   const [A, B] = sides
@@ -321,13 +320,13 @@ function Verdict({ sides, a, b, sectors }: { sides: [Side, Side]; a: PreparedLap
   const faster = gap >= 0 ? A : B
   return (
     <div className="panel-flat grid grid-cols-2 divide-line border-l-2 lg:grid-cols-4 lg:divide-x" style={{ borderLeftColor: faster.colour }}>
-      <Cell label="Écart au tour">
+      <Cell label={t('telemetry.lapGap')}>
         <span style={{ color: faster.colour }}>{faster.driver.acronym}</span> <span className="text-paper">{Math.abs(gap).toFixed(3)} s</span>
         <div className="mt-1 text-[11px] text-muted">
-          {Math.abs(gap) < 0.0005 ? 'à égalité' : `plus rapide que ${(faster.key === 'A' ? B : A).driver.acronym}`}
+          {Math.abs(gap) < 0.0005 ? t('telemetry.level') : t('telemetry.fasterThan', { driver: (faster.key === 'A' ? B : A).driver.acronym })}
         </div>
       </Cell>
-      <Cell label="Mini-secteurs">
+      <Cell label={t('telemetry.miniSectors')}>
         <span style={{ color: A.colour }}>{winsA}</span>
         <span className="text-dim"> – </span>
         <span style={{ color: B.colour }}>{sectors.length - winsA}</span>
@@ -335,13 +334,13 @@ function Verdict({ sides, a, b, sectors }: { sides: [Side, Side]; a: PreparedLap
           {A.driver.acronym} / {B.driver.acronym}
         </div>
       </Cell>
-      <Cell label="Plein gaz">
+      <Cell label={t('telemetry.fullThrottle')}>
         <span style={{ color: A.colour }}>{Math.round(fullThrottleShare(a) * 100)}%</span>
         <span className="text-dim"> · </span>
         <span style={{ color: B.colour }}>{Math.round(fullThrottleShare(b) * 100)}%</span>
-        <div className="mt-1 text-[11px] text-muted">de la distance du tour</div>
+        <div className="mt-1 text-[11px] text-muted">{t('telemetry.ofLapDistance')}</div>
       </Cell>
-      <Cell label="Où se fait l’écart" className="col-span-2 lg:col-span-1">
+      <Cell label={t('telemetry.whereGap')} className="col-span-2 lg:col-span-1">
         <ul className="space-y-0.5 font-sans text-xs">
           {byClass
             .filter((x) => x.n > 0)
@@ -349,7 +348,7 @@ function Verdict({ sides, a, b, sectors }: { sides: [Side, Side]; a: PreparedLap
               const s = x.gain >= 0 ? A : B
               return (
                 <li key={x.c} className="flex items-baseline justify-between gap-2">
-                  <span className="text-muted">{CLASS_LABEL[x.c]}</span>
+                  <span className="text-muted">{t(`telemetry.speedClass.${x.c}`)}</span>
                   <span className="tnum">
                     <span style={{ color: s.colour }}>{s.driver.acronym}</span> <span className="text-paper">{Math.abs(x.gain).toFixed(3)}</span>
                   </span>
@@ -376,12 +375,13 @@ function Cell({ label, children, className }: { label: string; children: ReactNo
 
 type ChannelKey = 'v' | 'th' | 'br' | 'g' | 'rpm'
 
-const CHANNELS: { key: ChannelKey; label: string; unit: string; height: number; step?: boolean; domain?: [number, number]; ticks: number }[] = [
-  { key: 'v', label: 'Vitesse', unit: 'km/h', height: 210, ticks: 5 },
-  { key: 'th', label: 'Gaz', unit: '%', height: 86, domain: [0, 100], ticks: 2 },
-  { key: 'br', label: 'Frein', unit: '', height: 46, step: true, domain: [0, 1], ticks: 1 },
-  { key: 'g', label: 'Rapport', unit: '', height: 86, step: true, domain: [1, 8], ticks: 4 },
-  { key: 'rpm', label: 'Régime', unit: 'tr/min', height: 86, ticks: 3 },
+// label and unit: telemetry.channels.<key> / telemetry.units.<key>
+const CHANNELS: { key: ChannelKey; height: number; step?: boolean; domain?: [number, number]; ticks: number }[] = [
+  { key: 'v', height: 210, ticks: 5 },
+  { key: 'th', height: 86, domain: [0, 100], ticks: 2 },
+  { key: 'br', height: 46, step: true, domain: [0, 1], ticks: 1 },
+  { key: 'g', height: 86, step: true, domain: [1, 8], ticks: 4 },
+  { key: 'rpm', height: 86, ticks: 3 },
 ]
 
 function Channels({
@@ -502,6 +502,8 @@ function Channel({
   readout: Record<ChannelKey, number>[] | null
 }) {
   const innerH = c.height - MARGIN.top - MARGIN.bottom
+  const label = t(`telemetry.channels.${c.key}`)
+  const unit = t(`telemetry.units.${c.key}`)
   const y = useMemo(() => {
     let dom = c.domain
     if (!dom) {
@@ -531,7 +533,7 @@ function Channel({
         height={c.height}
         margin={MARGIN}
         onPointer={onPointer}
-        ariaLabel={c.label}
+        ariaLabel={label}
         overlay={({ width }) =>
           hover !== null && readout && c.key === 'v' ? (
             <div className="absolute top-1 flex gap-3" style={x(hover) > width * 0.6 ? { right: width - x(hover) + 10 } : { left: x(hover) + 10 }}>
@@ -546,8 +548,8 @@ function Channel({
                         </td>
                         <td className="pr-2 text-right text-paper">{readout[i].v}</td>
                         <td className="pr-2 text-right text-muted">{readout[i].th}%</td>
-                        <td className="pr-2 text-right">{readout[i].br ? <span className="text-signal">FREIN</span> : <span className="text-dim">—</span>}</td>
-                        <td className="text-right text-muted">R{readout[i].g}</td>
+                        <td className="pr-2 text-right">{readout[i].br ? <span className="text-signal">{t('telemetry.brake')}</span> : <span className="text-dim">—</span>}</td>
+                        <td className="text-right text-muted">{t('telemetry.gearShort', { n: readout[i].g })}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -581,8 +583,8 @@ function Channel({
               />
             ))}
             <text x={6} y={10} className="fill-muted font-mono text-[9px] uppercase tracking-[0.16em]" style={HALO}>
-              {c.label}
-              {c.unit && <tspan className="fill-dim"> · {c.unit}</tspan>}
+              {label}
+              {unit && <tspan className="fill-dim"> · {unit}</tspan>}
             </text>
             <HoverLine x={x} hover={hover} height={height} />
             {hover !== null &&
@@ -646,7 +648,7 @@ function DeltaChart({
         height={height}
         margin={MARGIN}
         onPointer={onPointer}
-        ariaLabel="Écart cumulé"
+        ariaLabel={t('telemetry.cumulativeGap')}
         overlay={({ width }) =>
           hover !== null && hoverDelta !== null ? (
             <div
@@ -675,13 +677,13 @@ function DeltaChart({
             <path d={shapes.neg} fill={B.colour} opacity={0.22} />
             <path d={shapes.ln} fill="none" stroke="var(--color-paper)" strokeWidth={1.25} />
             <text x={6} y={10} className="fill-muted font-mono text-[9px] uppercase tracking-[0.16em]" style={HALO}>
-              Écart cumulé · s
+              {t('telemetry.cumulativeGap')} · s
             </text>
             <text x={width - 6} y={10} textAnchor="end" className="font-mono text-[9px] uppercase tracking-[0.12em]" fill={A.colour}>
-              ▲ {A.driver.acronym} devant
+              ▲ {t('telemetry.ahead', { driver: A.driver.acronym })}
             </text>
             <text x={width - 6} y={h - 4} textAnchor="end" className="font-mono text-[9px] uppercase tracking-[0.12em]" fill={B.colour}>
-              ▼ {B.driver.acronym} devant
+              ▼ {t('telemetry.ahead', { driver: B.driver.acronym })}
             </text>
             <HoverLine x={x} hover={hover} height={h} />
             {hover !== null && hoverDelta !== null && <circle cx={x(hover)} cy={y(hoverDelta)} r={3} fill="var(--color-paper)" />}

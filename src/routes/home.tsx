@@ -4,6 +4,8 @@ import { Link } from '@tanstack/react-router'
 import clsx from 'clsx'
 import { EmptyState, ErrorState, Flag, Panel, SectionTitle, Skeleton, StartLights } from '@/components/ui'
 import { PodiumChips, SessionCard, sessionShort, shortName, useNow } from '@/features/home/shared'
+import { t } from '@/i18n'
+import { sessionName } from '@/i18n/helpers'
 import { homeQuery, seasonQuery } from '@/lib/api'
 import { onDark } from '@/lib/colors'
 import { countdownParts, dateRange, longDate, points } from '@/lib/format'
@@ -24,10 +26,10 @@ export function HomePage() {
         <section className="animate-rise" style={{ animationDelay: '120ms' }}>
           <SectionTitle
             index="01"
-            title={`Le week-end · ${shortName(weekend.name)}`}
+            title={t('home.weekend', { name: shortName(weekend.name) })}
             aside={
               <Link to="/gp/$meetingKey" params={{ meetingKey: weekend.key }} className="link-underline font-mono uppercase tracking-wider hover:text-paper">
-                Voir le Grand Prix →
+                {t('home.viewGp')}
               </Link>
             }
           />
@@ -43,20 +45,20 @@ export function HomePage() {
 
       <div className="grid gap-10 lg:grid-cols-12">
         <section className="animate-rise lg:col-span-5" style={{ animationDelay: '240ms' }}>
-          <SectionTitle index="03" title="Dernière course" />
-          {h.lastRace ? <LastRace meeting={h.lastRace.meeting} session={h.lastRace.session} /> : <EmptyState title="Pas encore de course">La saison n’a pas commencé.</EmptyState>}
+          <SectionTitle index="03" title={t('home.lastRace')} />
+          {h.lastRace ? <LastRace meeting={h.lastRace.meeting} session={h.lastRace.session} /> : <EmptyState title={t('home.noRaceTitle')}>{t('home.noRaceBody')}</EmptyState>}
         </section>
         <section className="animate-rise lg:col-span-7" style={{ animationDelay: '320ms' }}>
           <SectionTitle
             index="04"
-            title="Championnat"
+            title={t('home.championship')}
             aside={
               <Link to="/classements/$year" params={{ year: h.year }} className="link-underline font-mono uppercase tracking-wider hover:text-paper">
-                Classements complets →
+                {t('home.fullStandings')}
               </Link>
             }
           />
-          {h.standings ? <Championship standings={h.standings} /> : <EmptyState title="Classement indisponible">Il sera calculé après la première course.</EmptyState>}
+          {h.standings ? <Championship standings={h.standings} /> : <EmptyState title={t('standings.unavailableTitle')}>{t('home.standingsPending')}</EmptyState>}
         </section>
       </div>
     </div>
@@ -70,18 +72,18 @@ function Countdown({ target, live }: { target: string; live: boolean }) {
     return (
       <div className="flex items-center gap-4">
         <span className="animate-pulse-dot size-4 rounded-full bg-signal shadow-[0_0_24px_var(--color-signal)]" />
-        <span className="display text-6xl text-signal sm:text-8xl">En piste</span>
+        <span className="display text-6xl text-signal sm:text-8xl">{t('home.onTrack')}</span>
       </div>
     )
   }
   const parts = [
-    { v: days, l: 'J' },
-    { v: hours, l: 'H' },
-    { v: minutes, l: 'MIN' },
-    { v: seconds, l: 'S' },
+    { v: days, l: t('home.units.days') },
+    { v: hours, l: t('home.units.hours') },
+    { v: minutes, l: t('home.units.minutes') },
+    { v: seconds, l: t('home.units.seconds') },
   ]
   return (
-    <div className="flex items-end gap-3 sm:gap-6" aria-label="Compte à rebours">
+    <div className="flex items-end gap-3 sm:gap-6" aria-label={t('home.countdown')}>
       {parts.map((p, i) => (
         <div key={p.l} className="flex items-end gap-3 sm:gap-6">
           <div className="flex flex-col">
@@ -114,9 +116,9 @@ function Hero({ meeting, session, live }: { meeting: MeetingSummary; session: Se
       <div className="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_380px]">
         <div className="min-w-0">
           <div className="eyebrow mb-4 flex flex-wrap items-center gap-2">
-            {live ? <span className="text-signal">● En direct</span> : <span>Prochaine session</span>}
+            {live ? <span className="text-signal">{t('home.live')}</span> : <span>{t('home.nextSession')}</span>}
             <span className="text-dim">/</span>
-            <span>{meeting.round ? `Manche ${meeting.round}` : 'Essais'}</span>
+            <span>{meeting.round ? t('season.round', { n: meeting.round }) : t('season.testing')}</span>
             <span className="text-dim">/</span>
             <span>{meeting.location}</span>
           </div>
@@ -125,7 +127,7 @@ function Hero({ meeting, session, live }: { meeting: MeetingSummary; session: Se
             <h1 className="display min-w-0 text-5xl sm:text-7xl lg:text-8xl">{shortName(meeting.name)}</h1>
           </div>
           <div className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="display text-3xl text-signal sm:text-4xl">{session.name}</span>
+            <span className="display text-3xl text-signal sm:text-4xl">{sessionName(session.name)}</span>
             <span className="text-sm capitalize text-muted">{longDate(session.dateStart)}</span>
           </div>
           <Countdown target={session.dateStart} live={live} />
@@ -135,7 +137,7 @@ function Hero({ meeting, session, live }: { meeting: MeetingSummary; session: Se
               params={{ sessionKey: session.key }}
               className="group inline-flex items-center gap-3 bg-signal px-5 py-3 font-mono text-xs uppercase tracking-[0.16em] text-white transition-colors hover:bg-paper hover:text-ink"
             >
-              {live ? 'Suivre la session' : `Page ${sessionShort(session.name)}`}
+              {live ? t('home.followSession') : t('home.sessionPage', { session: sessionShort(session.name) })}
               <span className="transition-transform group-hover:translate-x-1">→</span>
             </Link>
             <Link
@@ -143,13 +145,13 @@ function Hero({ meeting, session, live }: { meeting: MeetingSummary; session: Se
               params={{ meetingKey: meeting.key }}
               className="inline-flex items-center gap-3 border border-line-2 px-5 py-3 font-mono text-xs uppercase tracking-[0.16em] text-muted transition-colors hover:border-paper hover:text-paper"
             >
-              Programme du week-end
+              {t('home.weekendSchedule')}
             </Link>
           </div>
         </div>
         {meeting.circuitImage && (
           <div className="relative hidden items-center justify-center lg:flex">
-            <img src={meeting.circuitImage} alt={`Tracé — ${meeting.circuitName}`} onError={(e) => (e.currentTarget.style.display = 'none')} className="w-full max-w-[360px] opacity-90 drop-shadow-[0_0_30px_rgba(255,59,47,0.25)]" />
+            <img src={meeting.circuitImage} alt={t('meeting.circuitAlt', { circuit: meeting.circuitName })} onError={(e) => (e.currentTarget.style.display = 'none')} className="w-full max-w-[360px] opacity-90 drop-shadow-[0_0_30px_rgba(255,59,47,0.25)]" />
             <div className="absolute bottom-0 left-0 font-mono text-[10px] uppercase tracking-widest text-dim">{meeting.circuitName}</div>
           </div>
         )}
@@ -161,9 +163,9 @@ function Hero({ meeting, session, live }: { meeting: MeetingSummary; session: Se
 function SeasonOver({ year }: { year: number }) {
   return (
     <section className="panel animate-rise p-10">
-      <div className="eyebrow mb-3">Saison {year}</div>
-      <h1 className="display text-6xl sm:text-8xl">Rideau</h1>
-      <p className="mt-4 max-w-lg text-sm text-muted">Aucune session à venir pour le moment. Le calendrier de la prochaine saison apparaîtra dès sa publication.</p>
+      <div className="eyebrow mb-3">{t('season.label', { year })}</div>
+      <h1 className="display text-6xl sm:text-8xl">{t('home.seasonOverTitle')}</h1>
+      <p className="mt-4 max-w-lg text-sm text-muted">{t('home.seasonOverBody')}</p>
     </section>
   )
 }
@@ -180,10 +182,10 @@ function SeasonStrip({ year }: { year: number }) {
     <section className="animate-rise" style={{ animationDelay: '180ms' }}>
       <SectionTitle
         index="02"
-        title={`Saison ${year}`}
+        title={t('season.label', { year })}
         aside={
           <span className="tnum">
-            <span className="text-paper">{done}</span> / {rounds.length} manches
+            <span className="text-paper">{done}</span> / {t('home.rounds', { n: rounds.length })}
           </span>
         }
       />
@@ -214,10 +216,10 @@ function SeasonStrip({ year }: { year: number }) {
       </div>
       <div className="mt-3 flex items-center gap-4 font-mono text-[10px] uppercase tracking-wider text-dim">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 bg-gradient-to-b from-[#00D7B6] to-[#00D7B655]" /> couleur de l’équipe gagnante
+          <span className="h-2 w-3 bg-gradient-to-b from-[#00D7B6] to-[#00D7B655]" /> {t('home.legendWinner')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 bg-signal" /> en cours / prochaine
+          <span className="h-2 w-3 bg-signal" /> {t('home.legendCurrent')}
         </span>
       </div>
     </section>
@@ -256,14 +258,14 @@ function LastRace({ meeting, session }: { meeting: MeetingSummary; session: Sess
           })}
         </div>
       ) : (
-        <div className="py-8 text-center text-sm text-muted">Résultat en cours de récupération…</div>
+        <div className="py-8 text-center text-sm text-muted">{t('home.resultPending')}</div>
       )}
       <Link
         to="/session/$sessionKey"
         params={{ sessionKey: session.key }}
         className="mt-6 flex items-center justify-between border-t border-line pt-4 font-mono text-[11px] uppercase tracking-wider text-muted hover:text-signal"
       >
-        Analyse complète de la course <span>→</span>
+        {t('home.fullAnalysis')} <span>→</span>
       </Link>
     </Panel>
   )
@@ -278,8 +280,8 @@ function Championship({ standings }: { standings: NonNullable<HomeResponse['stan
     <div className="grid gap-6 md:grid-cols-[1.4fr_1fr]">
       <Panel flat className="p-4">
         <div className="eyebrow mb-3 flex justify-between">
-          <span>Pilotes</span>
-          <span>après la manche {standings.round}</span>
+          <span>{t('standings.drivers')}</span>
+          <span>{t('home.afterRound', { n: standings.round })}</span>
         </div>
         <ol className="space-y-1">
           {drivers.map((d, i) => (
@@ -301,7 +303,7 @@ function Championship({ standings }: { standings: NonNullable<HomeResponse['stan
         </ol>
       </Panel>
       <Panel flat className="p-4">
-        <div className="eyebrow mb-3">Constructeurs</div>
+        <div className="eyebrow mb-3">{t('standings.teams')}</div>
         <ol className="space-y-3">
           {teams.map((t, i) => (
             <li key={t.teamId} className="animate-rise" style={{ animationDelay: `${420 + i * 50}ms` }}>
@@ -320,7 +322,7 @@ function Championship({ standings }: { standings: NonNullable<HomeResponse['stan
         </ol>
         {standings.drivers[0] && (
           <div className="mt-6 border-t border-line pt-4">
-            <div className="eyebrow mb-2">Leader</div>
+            <div className="eyebrow mb-2">{t('format.leader')}</div>
             <PodiumChips
               podium={[
                 {
@@ -335,7 +337,7 @@ function Championship({ standings }: { standings: NonNullable<HomeResponse['stan
             />
             {standings.drivers[1] && (
               <div className="mt-2 text-xs text-muted">
-                <span className="tnum text-paper">+{points(standings.drivers[0].points - standings.drivers[1].points)}</span> pts sur {standings.drivers[1].code}
+                <span className="tnum text-paper">+{points(standings.drivers[0].points - standings.drivers[1].points)}</span> {t('home.ptsOver', { code: standings.drivers[1].code })}
               </div>
             )}
           </div>

@@ -5,6 +5,7 @@ import { Pause, Play, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWidth } from '@/charts/core'
 import { EmptyState, Panel, Segmented, StartLights, TyreBadge } from '@/components/ui'
+import { t } from '@/i18n'
 import { circuitQuery, replayQuery } from '@/lib/api'
 import { onDark } from '@/lib/colors'
 import type { TabProps } from '@/features/session/types'
@@ -75,12 +76,12 @@ function standingsAt(T: number, bundle: SessionBundle, tl: Timeline, drivers: Ma
   const leaderEnds = tl.ends.get(leader?.d) ?? []
   return rows.map((r, i) => {
     let gap = '—'
-    if (r.out) gap = 'ABD'
-    else if (i === 0) gap = r.k ? `T${Math.min(r.k + 1, bundle.totalLaps)}` : 'Grille'
+    if (r.out) gap = t('replay.retired')
+    else if (i === 0) gap = r.k ? t('replay.lapShort', { n: Math.min(r.k + 1, bundle.totalLaps) }) : t('replay.grid')
     else if (r.k > 0) {
       const myEnd = r.last
       const lapsDown = bisectRight(leaderEnds, myEnd) + 1 - r.k
-      gap = lapsDown >= 1 ? `+${lapsDown} T` : `+${(myEnd - leaderEnds[r.k - 1]).toFixed(1)}`
+      gap = lapsDown >= 1 ? t('replay.lapsDown', { n: lapsDown }) : `+${(myEnd - leaderEnds[r.k - 1]).toFixed(1)}`
     }
     const stint = bundle.stints.find((s) => s.driverNumber === r.d && r.k + 1 >= s.lapStart && r.k + 1 <= s.lapEnd)
     const driver = drivers.get(r.d)!
@@ -101,10 +102,10 @@ export default function Replay({ meta, bundle, ordered, drivers }: TabProps) {
   const replay = useQuery({ ...replayQuery(meta.replayUrl ?? ''), enabled: Boolean(meta.replayUrl) })
   const layout = useQuery({ ...circuitQuery(meta.circuitUrl ?? ''), enabled: Boolean(meta.circuitUrl) })
 
-  if (!meta.telemetryUrl) return <TelemetryPending title="Replay en préparation" />
-  if (!meta.replayUrl) return <EmptyState title="Pas de replay">Le replay n’est disponible que pour les courses et les sprints.</EmptyState>
-  if (replay.isPending || (meta.circuitUrl && layout.isPending)) return <StartLights label="Chargement du replay" />
-  if (replay.isError) return <EmptyState title="Replay indisponible">{(replay.error as Error).message}</EmptyState>
+  if (!meta.telemetryUrl) return <TelemetryPending title={t('replay.pendingTitle')} />
+  if (!meta.replayUrl) return <EmptyState title={t('replay.none')}>{t('replay.noneBody')}</EmptyState>
+  if (replay.isPending || (meta.circuitUrl && layout.isPending)) return <StartLights label={t('replay.loading')} />
+  if (replay.isError) return <EmptyState title={t('replay.unavailable')}>{(replay.error as Error).message}</EmptyState>
   return <ReplayPlayer data={replay.data} layout={layout.data} bundle={bundle} drivers={drivers} />
 }
 
@@ -329,7 +330,7 @@ function ReplayPlayer({ data, layout, bundle, drivers }: { data: ReplayData; lay
       <div className="lg:col-span-8">
         <Panel className="relative overflow-hidden">
           <div className="absolute left-4 top-4 z-10 flex flex-col gap-1">
-            <div className="eyebrow">Tour</div>
+            <div className="eyebrow">{t('replay.lap')}</div>
             <div className="display text-5xl leading-none">
               {Math.min(Math.max(1, leaderLaps + 1), bundle.totalLaps)}
               <span className="text-2xl text-dim">/{bundle.totalLaps}</span>
@@ -343,11 +344,11 @@ function ReplayPlayer({ data, layout, bundle, drivers }: { data: ReplayData; lay
                 neutral.type === 'RED' ? 'border-signal bg-signal text-white' : 'border-yellow bg-yellow text-ink',
               )}
             >
-              {neutral.type === 'SC' ? 'Safety car' : neutral.type === 'VSC' ? 'Virtual safety car' : 'Drapeau rouge'}
+              {t(`replay.neutral.${neutral.type}`)}
             </div>
           )}
           <div ref={wrapRef} className="w-full">
-            <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: '100%', height }} className="block cursor-pointer" aria-label="Replay de la course" />
+            <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: '100%', height }} className="block cursor-pointer" aria-label={t('replay.canvasAria')} />
           </div>
         </Panel>
 
@@ -358,16 +359,16 @@ function ReplayPlayer({ data, layout, bundle, drivers }: { data: ReplayData; lay
               setPlaying((p) => !p)
             }}
             className="flex h-10 w-24 items-center justify-center gap-2 bg-signal font-mono text-xs uppercase tracking-wider text-white transition-transform active:scale-95"
-            aria-label={playing ? 'Pause' : 'Lecture'}
+            aria-label={playing ? t('replay.pause') : t('replay.play')}
           >
             {playing ? <Pause size={15} /> : <Play size={15} />}
-            {playing ? 'Pause' : 'Lecture'}
+            {playing ? t('replay.pause') : t('replay.play')}
           </button>
-          <button onClick={() => seek(tStart)} className="flex size-10 items-center justify-center border border-line-2 text-muted hover:text-paper" aria-label="Revenir au départ">
+          <button onClick={() => seek(tStart)} className="flex size-10 items-center justify-center border border-line-2 text-muted hover:text-paper" aria-label={t('replay.restart')}>
             <RotateCcw size={15} />
           </button>
           <Segmented items={SPEEDS.map((s) => ({ value: String(s) as `${Speed}`, label: `${s}×` }))} value={String(speed) as `${Speed}`} onChange={(v) => setSpeed(Number(v) as Speed)} />
-          <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-dim sm:inline">Espace · ← →</span>
+          <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-dim sm:inline">{t('replay.keys')}</span>
         </div>
 
         <Scrubber
@@ -388,13 +389,13 @@ function ReplayPlayer({ data, layout, bundle, drivers }: { data: ReplayData; lay
       <div className="lg:col-span-4">
         <Panel flat className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="eyebrow">Classement en direct</span>
-            <span className="eyebrow">Écart</span>
+            <span className="eyebrow">{t('replay.liveOrder')}</span>
+            <span className="eyebrow">{t('replay.gap')}</span>
           </div>
           <Leaderboard rows={rows} focus={focus} onFocus={(n) => { setFocus((c) => (c === n ? null : n)); dirty.current = true }} />
         </Panel>
         <p className="mt-3 text-[11px] leading-relaxed text-dim">
-          Positions GPS à 1 Hz interpolées. Cliquez sur une voiture ou un pilote pour le suivre.
+          {t('replay.footnote')}
         </p>
       </div>
     </div>
@@ -464,7 +465,7 @@ function Scrubber({
       <div
         ref={ref}
         role="slider"
-        aria-label="Position dans la course"
+        aria-label={t('replay.scrubberAria')}
         aria-valuemin={0}
         aria-valuemax={100}
         tabIndex={-1}
@@ -511,20 +512,20 @@ function Scrubber({
         {leaderStarts.map((s, i) =>
           (i + 1) % 10 === 0 || i === 0 ? (
             <span key={i} className="tnum absolute -translate-x-1/2 text-[9px] text-dim" style={{ left: pct(s) }}>
-              T{i + 1}
+              {t('replay.lapShort', { n: i + 1 })}
             </span>
           ) : null,
         )}
       </div>
       <div className="mt-1 flex flex-wrap gap-4 text-[10px] text-dim">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 bg-yellow" /> Safety car
+          <span className="h-2 w-4 bg-yellow" /> {t('replay.neutral.SC')}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-4" style={{ background: 'repeating-linear-gradient(45deg, var(--color-yellow) 0 3px, transparent 3px 6px)' }} /> VSC
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 bg-signal" /> Drapeau rouge
+          <span className="h-2 w-4 bg-signal" /> {t('replay.neutral.RED')}
         </span>
       </div>
     </div>

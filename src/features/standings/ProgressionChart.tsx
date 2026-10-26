@@ -2,6 +2,7 @@ import { scaleLinear } from 'd3-scale'
 import { line } from 'd3-shape'
 import { useMemo, useState } from 'react'
 import { AxisX, ChartFrame, GridY, Tooltip } from '@/charts/core'
+import { t } from '@/i18n'
 
 export interface Series {
   id: string
@@ -31,7 +32,7 @@ export function ProgressionChart({
     <ChartFrame
       height={420}
       margin={{ top: 16, right: 64, bottom: 30, left: 44 }}
-      ariaLabel="Évolution des points au championnat"
+      ariaLabel={t('standings.chartAria')}
       onPointer={(p) => setHover(p ? p.x : null)}
       overlay={({ width }) => {
         if (hover === null || n === 0) return null
@@ -44,7 +45,7 @@ export function ProgressionChart({
         return (
           <Tooltip x={x(i)} width={width}>
             <div className="eyebrow mb-1.5">
-              Manche {rounds[i].round} {rounds[i].sprint && '· sprint'}
+              {t('season.round', { n: rounds[i].round })} {rounds[i].sprint && '· sprint'}
             </div>
             <div className="mb-2 text-paper">{rounds[i].name.replace('Grand Prix', 'GP')}</div>
             <ul className="space-y-0.5">

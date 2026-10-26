@@ -1,4 +1,4 @@
-# Pit/Wall — analyse F1 100 % Cloudflare
+# F1 RaceView — analyse F1 100 % Cloudflare
 
 Chaque session de F1 depuis 2023 : classement, temps au tour, course tour par tour, stratégies pneus,
 direction de course, météo, **télémétrie comparée** (vitesse, gaz, frein, rapport, delta, carte de domination
@@ -73,6 +73,10 @@ Secrets GitHub nécessaires : `CLOUDFLARE_API_TOKEN` (droits Workers, D1, R2, Wo
 Le site est servi sur **https://f1-api.edge-mega.com** (route `custom_domain` dans `wrangler.jsonc`, nécessaire aussi
 pour le Cache API qui ne fonctionne pas sur `*.workers.dev`). La CI supprime l'ancien Worker
 `f1-api-cache-production` qui possédait ce domaine. L'ancien projet Pages `f1-session-laps` peut être supprimé.
+
+Chaque PR est aussi déployée en preview sur le Worker `f1-dashboard-preview` (`*.workers.dev`, env `preview` de
+`wrangler.jsonc`) : mêmes D1 et R2 que la prod, donc de vraies données, mais ni cron ni endpoints admin ; le rate
+limiter et les Workflows d'ingestion restent ceux du Worker de prod. L'URL est dans le résumé du job CI.
 
 Exploitation : le secret GitHub `ADMIN_TOKEN` est poussé dans le Worker à chaque déploiement ; le workflow manuel
 **Ops** (onglet Actions) affiche l'état d'ingestion et les dernières instances de Workflow.

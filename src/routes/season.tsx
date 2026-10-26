@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { EmptyState, ErrorState, Flag, PageHeader, SectionTitle, Skeleton } from '@/components/ui'
 import { shortName, useNow } from '@/features/home/shared'
 import { YearSwitcher } from '@/features/home/YearSwitcher'
+import { t } from '@/i18n'
 import { seasonQuery } from '@/lib/api'
 import { onDark } from '@/lib/colors'
 import { dateRange } from '@/lib/format'
@@ -25,17 +26,17 @@ export function SeasonPage() {
   return (
     <div>
       <PageHeader
-        eyebrow={<span>Calendrier</span>}
+        eyebrow={<span>{t('season.calendar')}</span>}
         title={
           <>
-            Saison <span className="text-signal">{year}</span>
+            {t('nav.season')} <span className="text-signal">{year}</span>
           </>
         }
         aside={<YearSwitcher years={years} current={year} to="/saison/$year" />}
       >
         {data ? (
           <span className="tnum">
-            {total} manches · {done} disputées · {rounds.filter((m) => m.sessions.some((s) => s.kind === 'sprint')).length} week-ends sprint
+            {t('season.summary', { total, done, sprints: rounds.filter((m) => m.sessions.some((s) => s.kind === 'sprint')).length })}
           </span>
         ) : null}
       </PageHeader>
@@ -49,7 +50,7 @@ export function SeasonPage() {
       ) : season.isError ? (
         <ErrorState error={season.error} retry={() => season.refetch()} />
       ) : !data ? (
-        <EmptyState title="Saison indisponible">Le calendrier {year} n’est pas encore synchronisé. Réessaie dans quelques minutes.</EmptyState>
+        <EmptyState title={t('season.unavailableTitle')}>{t('season.unavailableBody', { year })}</EmptyState>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -59,7 +60,7 @@ export function SeasonPage() {
           </div>
           {tests.length > 0 && (
             <section className="mt-14">
-              <SectionTitle title="Essais de pré-saison" />
+              <SectionTitle title={t('season.preseason')} />
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {tests.map((m) => (
                   <Link
@@ -128,7 +129,7 @@ function RoundCard({ meeting: m, next, past, index }: { meeting: MeetingSummary;
       )}
       <div className="relative flex items-center gap-2">
         <Flag src={m.countryFlag} alt={m.countryName} className="h-4 border border-line" />
-        <span className="eyebrow">{m.round ? `Manche ${m.round}` : m.isCancelled ? 'Annulé' : 'Hors championnat'}</span>
+        <span className="eyebrow">{m.round ? t('season.round', { n: m.round }) : m.isCancelled ? t('season.cancelled') : t('season.nonChampionship')}</span>
       </div>
       <div className="relative mt-3">
         <h3 className={clsx('display text-3xl', m.isCancelled && 'line-through decoration-signal decoration-2')}>{shortName(m.name)}</h3>
@@ -138,10 +139,10 @@ function RoundCard({ meeting: m, next, past, index }: { meeting: MeetingSummary;
       </div>
       <div className="relative mt-auto flex flex-wrap items-end justify-between gap-2 pt-6">
         {m.isCancelled ? (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-signal">Annulé</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-signal">{t('season.cancelled')}</span>
         ) : winner ? (
           <div>
-            <div className="eyebrow mb-1">Vainqueur</div>
+            <div className="eyebrow mb-1">{t('season.winner')}</div>
             <div className="flex items-center gap-2">
               <span className="h-5 w-1" style={{ background: accent }} />
               <span className="display text-2xl">{winner.acronym}</span>
@@ -149,11 +150,11 @@ function RoundCard({ meeting: m, next, past, index }: { meeting: MeetingSummary;
             </div>
           </div>
         ) : next ? (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-signal">● Prochaine manche</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-signal">{t('season.nextRound')}</span>
         ) : past ? (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-amber">Résultat en attente</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-amber">{t('season.resultPending')}</span>
         ) : (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-dim">À venir</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-dim">{t('status.upcoming')}</span>
         )}
         {sprint && <span className="border border-amber/50 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber">Sprint</span>}
       </div>

@@ -164,3 +164,13 @@
     background-size: 100% 1px;
   }
 }
+
+/* Horizontal strips (nav, tabs): scroll by swipe/trackpad, no scrollbar, never a vertical one. */
+@utility scroll-strip {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

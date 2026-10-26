@@ -1,5 +1,6 @@
 import type { SessionMeta } from '@shared/types'
 import { useEffect } from 'react'
+import { t } from '@/i18n'
 
 const triggered = new Set<number>()
 
@@ -17,7 +18,7 @@ export function useRequestTelemetry(meta: SessionMeta, driver: number | undefine
   }, [missing, key, driver])
 }
 
-export function TelemetryPending({ title = 'Télémétrie en préparation' }: { title?: string }) {
+export function TelemetryPending({ title = t('telemetry.pending.title') }: { title?: string }) {
   return (
     <div className="panel relative overflow-hidden px-6 py-20 text-center">
       <svg viewBox="0 0 600 120" className="mx-auto mb-6 h-24 w-full max-w-xl" aria-hidden>
@@ -46,8 +47,7 @@ export function TelemetryPending({ title = 'Télémétrie en préparation' }: { 
       </svg>
       <div className="display text-4xl">{title}</div>
       <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-        Vitesse, gaz, frein, rapport et position GPS de chaque voiture sont en cours de récupération (deux requêtes par pilote,
-        à la cadence autorisée par OpenF1). La page se met à jour toute seule dès que c’est prêt, en général en quelques minutes.
+        {t('telemetry.pending.body')}
       </p>
     </div>
   )

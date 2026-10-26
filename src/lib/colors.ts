@@ -1,12 +1,13 @@
 import type { Compound } from '@shared/types'
 
-export const TYRE: Record<Compound, { color: string; label: string; short: string }> = {
-  SOFT: { color: 'var(--color-soft)', label: 'Tendre', short: 'S' },
-  MEDIUM: { color: 'var(--color-medium)', label: 'Medium', short: 'M' },
-  HARD: { color: 'var(--color-hard)', label: 'Dur', short: 'H' },
-  INTERMEDIATE: { color: 'var(--color-inter)', label: 'Intermédiaire', short: 'I' },
-  WET: { color: 'var(--color-wet)', label: 'Pluie', short: 'W' },
-  UNKNOWN: { color: 'var(--color-dim)', label: 'Inconnu', short: '?' },
+/** Display names live in i18n (`tyreLabel`). */
+export const TYRE: Record<Compound, { color: string; short: string }> = {
+  SOFT: { color: 'var(--color-soft)', short: 'S' },
+  MEDIUM: { color: 'var(--color-medium)', short: 'M' },
+  HARD: { color: 'var(--color-hard)', short: 'H' },
+  INTERMEDIATE: { color: 'var(--color-inter)', short: 'I' },
+  WET: { color: 'var(--color-wet)', short: 'W' },
+  UNKNOWN: { color: 'var(--color-dim)', short: '?' },
 }
 
 function luminance(hex: string) {
