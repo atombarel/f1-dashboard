@@ -7,7 +7,7 @@ export const LANGS = [
 ] as const
 export type Lang = (typeof LANGS)[number]['code']
 
-const STORAGE_KEY = 'pitwall:lang'
+const STORAGE_KEY = 'f1raceview:lang'
 const isLang = (v: unknown): v is Lang => LANGS.some((l) => l.code === v)
 
 /** ?lang= → saved choice → browser languages → English for everyone but French speakers. */

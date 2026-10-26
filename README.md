@@ -1,4 +1,4 @@
-# Pit/Wall — analyse F1 100 % Cloudflare
+# F1 RaceView — analyse F1 100 % Cloudflare
 
 Chaque session de F1 depuis 2023 : classement, temps au tour, course tour par tour, stratégies pneus,
 direction de course, météo, **télémétrie comparée** (vitesse, gaz, frein, rapport, delta, carte de domination

@@ -13,7 +13,7 @@ function Logo() {
         <path d="M2 24 L12 0" stroke="var(--color-ink)" strokeWidth="2" />
       </svg>
       <span className="display hidden text-2xl tracking-tight min-[440px]:inline">
-        Pit<span className="text-signal">/</span>Wall
+        F1 Race<span className="text-signal">View</span>
       </span>
     </Link>
   )

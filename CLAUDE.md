@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Pit/Wall: F1 analysis site, one Cloudflare Worker (Hono API under `/api`, SPA as static assets). See README.md for the architecture.
+F1 RaceView: F1 analysis site, one Cloudflare Worker (Hono API under `/api`, SPA as static assets). See README.md for the architecture.
 
 ## Commands
 - `npm run dev` — Vite + Cloudflare plugin, runs the Worker, D1, R2, Durable Object and Workflows locally on :5173

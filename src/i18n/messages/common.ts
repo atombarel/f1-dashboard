@@ -3,14 +3,14 @@ import { defineMessages } from './define'
 export default defineMessages(
   {
     meta: {
-      title: 'Pit/Wall — Analyse F1 : résultats, tours, stratégie, télémétrie',
+      title: 'F1 RaceView — Analyse F1 : résultats, tours, stratégie, télémétrie',
       description: 'Tous les Grands Prix de F1 décortiqués : classements, temps au tour, stratégies pneus, télémétrie comparée et replay des courses.',
-      ogTitle: 'Pit/Wall — Analyse F1',
+      ogTitle: 'F1 RaceView — Analyse F1',
       ogDescription: 'Classements, tours, stratégie, télémétrie et replay de chaque session de F1.',
     },
     nav: {
       home: 'Accueil',
-      homeAria: 'Pit Wall — accueil',
+      homeAria: 'F1 RaceView — accueil',
       season: 'Saison',
       standings: 'Classements',
       next: 'Prochain :',
@@ -80,14 +80,14 @@ export default defineMessages(
   },
   {
     meta: {
-      title: 'Pit/Wall — F1 analysis: results, laps, strategy, telemetry',
+      title: 'F1 RaceView — F1 analysis: results, laps, strategy, telemetry',
       description: 'Every F1 Grand Prix broken down: classifications, lap times, tyre strategies, compared telemetry and race replays.',
-      ogTitle: 'Pit/Wall — F1 analysis',
+      ogTitle: 'F1 RaceView — F1 analysis',
       ogDescription: 'Classifications, laps, strategy, telemetry and replay for every F1 session.',
     },
     nav: {
       home: 'Home',
-      homeAria: 'Pit Wall — home',
+      homeAria: 'F1 RaceView — home',
       season: 'Season',
       standings: 'Standings',
       next: 'Next:',
