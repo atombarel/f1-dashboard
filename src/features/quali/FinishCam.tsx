@@ -1,16 +1,20 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useWidth } from '@/charts/core'
 import { t } from '@/i18n'
 import { lapTime } from '@/lib/format'
-import { CarGlyph } from './CarGlyph'
+import { CAR_LENGTH, CAR_WIDTH, CarGlyph } from './CarGlyph'
 import type { Centerline, Point } from './centerline'
 import { lanesAt, type CarFrame } from './stage'
 
-/** half the track width and the spacing of the lateral slots, metres */
+/** half the track width, metres */
 const HALF_WIDTH = 7
-const LANE = 3.3
+/** most lanes drawn side by side; more cars than that share lanes */
+const MAX_LANES = 10
 const CHIP_W = 106
 const CHIP_H = 42
+/** compact name tag, used when a full chip does not fit */
+const TAG_W = 46
+const TAG_H = 18
 /** room kept for the title and clock overlays */
 const HUD_H = 62
 
@@ -43,7 +47,7 @@ export function FinishCam({
 }) {
   const [ref, width] = useWidth<HTMLDivElement>()
   const vertical = width > 0 && width < 560
-  const height = vertical ? Math.round(Math.min(640, width * 1.45)) : Math.round(Math.max(320, Math.min(460, width * 0.46)))
+  const height = vertical ? Math.round(Math.min(640, width * 1.45)) : Math.round(Math.max(360, Math.min(560, width * 0.56)))
 
   return (
     <div ref={ref} className="relative w-full overflow-hidden bg-carbon" style={{ height }}>
@@ -78,12 +82,15 @@ function Scene({
   const along = vertical ? height - HUD_H : width
   const originY = vertical ? (height + HUD_H) / 2 : height / 2
   const across = vertical ? width : height
-  // px per metre: fit the span along the track, keep the track at most half the frame across
+  // px per metre along the track: the span fits the frame, distances along the track are to scale
   const k = Math.min((along * 0.86) / span, (across * 0.42) / (HALF_WIDTH * 2))
-  // across the track, distances are exaggerated when zoomed out so the cars stay readable (like TV graphics);
-  // along the track, everything stays to scale
-  const ex = Math.max(1, Math.min(2.4, (across * 0.46) / (HALF_WIDTH * 2 * k)))
-  const carK = k * Math.min(ex, 1.8)
+  // across the track the layout is schematic (the data has no lateral position): the track keeps the same width
+  // on screen whatever the zoom (leaving room for the labels on both sides), split into one lane per car
+  const ex = (across * 0.4) / (HALF_WIDTH * 2 * k)
+  const slots = Math.max(1, Math.min(MAX_LANES, frames.length))
+  const laneWidth = (HALF_WIDTH * 2 * 0.88) / slots
+  // cars as long as possible, but never wider than 80 % of their lane
+  const carK = Math.min(k * Math.min(ex, 1.8), (laneWidth * ex * k * 0.8) / CAR_WIDTH)
   const visible = along / k
   // camera on the chord from the back of the frame to the anchor, so the anchor stays near the front edge
   // even in the middle of a corner sequence (a hairpin falls back to the local heading)
@@ -149,54 +156,63 @@ function Scene({
 
   // cars
   const pad = 30
-  // cars are drawn longer than life when zoomed out, so they need that much room to share a slot
+  // cars are drawn longer than life when zoomed out: that is the room they need to share a lane
   const lanes = lanesAt(
     frames.map((f) => f.car),
     now,
-    5.8 * (carK / k) + 1,
+    CAR_LENGTH * (carK / k) + 1.5,
+    slots,
   )
   const cars = frames.map((f, i) => {
-    const phi = line.heading(f.d, 4)
-    const [sx, sy] = toScreen(side(f.d, lanes[i] * LANE))
+    const angle = angleOf(line.heading(f.d, 4))
+    // (nx, ny) is the nose, on the car's distance; (sx, sy) the middle of the car, for labels
+    const [nx, ny] = toScreen(side(f.d, lanes[i] * laneWidth))
+    const back = (CAR_LENGTH / 2) * carK
+    const sx = nx - Math.cos((angle * Math.PI) / 180) * back
+    const sy = ny - Math.sin((angle * Math.PI) / 180) * back
     const inside = sx > -pad && sx < width + pad && sy > -pad && sy < height + pad
-    return { f, sx, sy, lane: lanes[i], angle: angleOf(phi), inside }
+    return { f, nx, ny, sx, sy, lane: lanes[i], angle, inside }
   })
   const shown = cars.filter((c) => c.inside)
   const outside = cars.filter((c) => !c.inside && c.f.d < anchor).sort((a, b) => a.f.order - b.f.order)
 
-  // chips: greedy placement, preferred side given by the lane, further rows / sideways when taken.
-  // When the pack is too tight to fit them all, only the top three keep one regardless (the tower lists everyone).
-  const placed: { x: number; y: number }[] = []
-  const reach = 2.4 * carK
-  const clearOfChips = (x: number, y: number) => !placed.some((p) => Math.abs(p.x - x) < CHIP_W + 4 && Math.abs(p.y - y) < CHIP_H + 4)
-  const clearOfCars = (x: number, y: number) =>
-    !shown.some((c) => c.sx > x - reach && c.sx < x + CHIP_W + reach && c.sy > y - reach && c.sy < y + CHIP_H + reach)
+  // Labels never cover a car: a full chip where there is room, else a compact name tag, else nothing (the
+  // tower lists everyone). Fastest cars pick first, on the side of the track their lane is on.
+  const placed: { x: number; y: number; w: number; h: number }[] = []
+  const carRadius = (CAR_LENGTH / 2) * carK + 3
+  const hitsChip = (x: number, y: number, w: number, h: number) =>
+    placed.some((p) => x < p.x + p.w + 4 && p.x < x + w + 4 && y < p.y + p.h + 4 && p.y < y + h + 4)
+  const hitsCar = (x: number, y: number, w: number, h: number) =>
+    shown.some((c) => (Math.max(x, Math.min(x + w, c.sx)) - c.sx) ** 2 + (Math.max(y, Math.min(y + h, c.sy)) - c.sy) ** 2 < carRadius ** 2)
+  const spots = (c: (typeof shown)[number], w: number, h: number) => {
+    const pref = c.lane < 0 ? 1 : -1
+    const out = (vertical ? w : h) + 6
+    const base = carRadius + out / 2
+    const list: { x: number; y: number }[] = []
+    for (let row = 0; row < 4; row++)
+      for (const sign of [pref, -pref])
+        for (const slide of [0, 0.6, -0.6]) {
+          const off = sign * (base + row * out)
+          const cx = vertical ? c.sx + off : c.sx + slide * w
+          const cy = vertical ? c.sy + slide * h : c.sy + off
+          list.push({ x: Math.max(4, Math.min(width - w - 4, cx - w / 2)), y: Math.max(HUD_H, Math.min(height - h - 4, cy - h / 2)) })
+        }
+    return list
+  }
   const chips = [...shown]
     .sort((a, b) => a.f.car.rank - b.f.car.rank)
     .flatMap((c) => {
-      const pref = c.lane < 0 ? 1 : -1
-      const out = (vertical ? CHIP_W : CHIP_H) + 6
-      const base = 1.2 * carK + out / 2 + 4
-      const candidates: { x: number; y: number }[] = []
-      for (let row = 0; row < 4; row++)
-        for (const sign of [pref, -pref])
-          for (const slide of [0, 0.6, -0.6]) {
-            const off = sign * (base + row * out)
-            const cx = vertical ? c.sx + off : c.sx + slide * CHIP_W
-            const cy = vertical ? c.sy + slide * CHIP_H : c.sy + off
-            candidates.push({
-              x: Math.max(4, Math.min(width - CHIP_W - 4, cx - CHIP_W / 2)),
-              y: Math.max(HUD_H, Math.min(height - CHIP_H - 4, cy - CHIP_H / 2)),
-            })
-          }
-      // best: covers neither a chip nor a car; then: may cover a car; the top three always get one
-      const pos =
-        candidates.find((p) => clearOfChips(p.x, p.y) && clearOfCars(p.x, p.y)) ??
-        candidates.find((p) => clearOfChips(p.x, p.y)) ??
-        (c.f.car.rank < 3 ? candidates[0] : null)
-      if (!pos) return []
-      placed.push(pos)
-      return [{ c, ...pos }]
+      for (const [w, h, compact] of [
+        [CHIP_W, CHIP_H, false],
+        [TAG_W, TAG_H, true],
+      ] as const) {
+        const pos = spots(c, w, h).find((p) => !hitsChip(p.x, p.y, w, h) && !hitsCar(p.x, p.y, w, h))
+        if (pos) {
+          placed.push({ ...pos, w, h })
+          return [{ c, ...pos, w, h, compact }]
+        }
+      }
+      return []
     })
 
   const kerbDash = `${(2.4 * k).toFixed(1)} ${(2.4 * k).toFixed(1)}`
@@ -253,13 +269,13 @@ function Scene({
           )
         })}
 
-        {chips.map(({ c, x, y }) => (
+        {chips.map(({ c, x, y, w, h }) => (
           <line
             key={c.f.car.driver.number}
             x1={c.sx}
             y1={c.sy}
-            x2={Math.max(x, Math.min(x + CHIP_W, c.sx))}
-            y2={Math.max(y, Math.min(y + CHIP_H, c.sy))}
+            x2={Math.max(x, Math.min(x + w, c.sx))}
+            y2={Math.max(y, Math.min(y + h, c.sy))}
             stroke={c.f.car.colour}
             strokeOpacity={0.6}
           />
@@ -267,30 +283,14 @@ function Scene({
         {[...shown]
           .sort((a, b) => b.f.car.rank - a.f.car.rank)
           .map((c) => (
-            <g key={c.f.car.driver.number} transform={`translate(${c.sx},${c.sy}) rotate(${c.angle}) scale(${carK})`}>
+            <g key={c.f.car.driver.number} transform={`translate(${c.nx},${c.ny}) rotate(${c.angle}) scale(${carK})`}>
               <CarGlyph colour={c.f.car.colour} highlight={c.f.car === frames[0]?.car} />
             </g>
           ))}
       </svg>
 
-      {chips.map(({ c, x, y }) => (
-        <div
-          key={c.f.car.driver.number}
-          className="pointer-events-none absolute flex border border-line-2 bg-ink/90 shadow-lg"
-          style={{ left: x, top: y, width: CHIP_W, height: CHIP_H }}
-        >
-          <span className="w-1 shrink-0" style={{ background: c.f.car.colour }} />
-          <div className="min-w-0 flex-1 px-1.5 py-1 leading-none">
-            <div className="flex items-baseline justify-between gap-1">
-              <span className="display text-[17px] text-paper">{c.f.car.driver.acronym}</span>
-              <span className="tnum text-[9px] text-dim">P{c.f.car.rank + 1}</span>
-            </div>
-            <div className="tnum mt-1 flex items-baseline justify-between gap-1 text-[11px]">
-              <span className={c.f.gap === 0 ? 'text-purple' : 'text-paper'}>{c.f.gap === 0 ? lapTime(c.f.car.time) : fmtGap(c.f.gap)}</span>
-              {c.f.behind > 0.05 && <span className="whitespace-nowrap text-[9px] text-muted">{c.f.behind.toFixed(1)} m</span>}
-            </div>
-          </div>
-        </div>
+      {chips.map(({ c, x, y, w, h, compact }) => (
+        <Label key={c.f.car.driver.number} frame={c.f} compact={compact} style={{ left: x, top: y, width: w, height: h }} />
       ))}
 
       {outside.length > 0 && (
@@ -306,5 +306,31 @@ function Scene({
         </div>
       )}
     </>
+  )
+}
+
+/** Chip next to a car: name, rank, official gap and metres behind; or just the name when space is short. */
+function Label({ frame: f, compact, style }: { frame: CarFrame; compact: boolean; style: CSSProperties }) {
+  if (compact)
+    return (
+      <div className="pointer-events-none absolute flex items-center gap-1 border border-line-2 bg-ink/90 pr-1 text-[10px] font-semibold leading-none text-paper" style={style}>
+        <span className="h-full w-1 shrink-0" style={{ background: f.car.colour }} />
+        {f.car.driver.acronym}
+      </div>
+    )
+  return (
+    <div className="pointer-events-none absolute flex border border-line-2 bg-ink/90 shadow-lg" style={style}>
+      <span className="w-1 shrink-0" style={{ background: f.car.colour }} />
+      <div className="min-w-0 flex-1 px-1.5 py-1 leading-none">
+        <div className="flex items-baseline justify-between gap-1">
+          <span className="display text-[17px] text-paper">{f.car.driver.acronym}</span>
+          <span className="tnum text-[9px] text-dim">P{f.car.rank + 1}</span>
+        </div>
+        <div className="tnum mt-1 flex items-baseline justify-between gap-1 text-[11px]">
+          <span className={f.gap === 0 ? 'text-purple' : 'text-paper'}>{f.gap === 0 ? lapTime(f.car.time) : fmtGap(f.gap)}</span>
+          {f.behind > 0.05 && <span className="whitespace-nowrap text-[9px] text-muted">{f.behind.toFixed(1)} m</span>}
+        </div>
+      </div>
+    </div>
   )
 }

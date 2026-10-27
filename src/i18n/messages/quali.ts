@@ -33,7 +33,7 @@ export default defineMessages(
       sector: 'S{n}',
       flag: 'Drapeau',
       footnote:
-        'Chaque pilote s’élance sur son tour de référence au même instant, comme des fantômes. La distance entre les voitures vient de la télémétrie (vitesse intégrée, environ 4 mesures par seconde) ; leur position latérale est arrangée pour rester lisible.',
+        'Chaque pilote s’élance sur son tour de référence au même instant, comme des fantômes. La distance le long de la piste vient de la télémétrie (vitesse intégrée, environ 4 mesures par seconde) et se lit au nez des voitures. Les données publiques ne donnent pas la position latérale : chaque pilote a sa propre file, purement illustrative.',
     },
   },
   {
@@ -68,7 +68,7 @@ export default defineMessages(
       sector: 'S{n}',
       flag: 'Flag',
       footnote:
-        'Every driver starts their reference lap at the same instant, like ghosts. The distance between cars comes from telemetry (integrated speed, about 4 samples per second); their lateral position is arranged for readability.',
+        'Every driver starts their reference lap at the same instant, like ghosts. Distance along the track comes from telemetry (integrated speed, about 4 samples per second) and is measured at the nose of each car. Public data has no lateral position: each driver gets their own lane, for illustration only.',
     },
   },
 )

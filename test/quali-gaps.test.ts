@@ -5,7 +5,7 @@ import type { CircuitLayout, LapRow, LapTelemetry, SessionBundle } from '../shar
 import { centerlineFromLap, centerlineFromLayout } from '../src/features/quali/centerline'
 import { distanceAt, liveGap, metresBehind, prepareGhost, timeAt } from '../src/features/quali/ghost'
 import { lapForTime, qualiSegments, segmentEntries } from '../src/features/quali/segments'
-import { frameAt, lanesAt, spanAt, type GhostCar } from '../src/features/quali/stage'
+import { frameAt, lanesAt, slotOffsets, spanAt, type GhostCar } from '../src/features/quali/stage'
 
 /** A lap at constant speed (m/s), sampled every 250 ms, starting `offset` ms after the line. */
 function constantLap(speed: number, lapTime: number, offset = 120): LapTelemetry {
@@ -135,9 +135,19 @@ describe('stage', () => {
     expect(frames[2].behind).toBeGreaterThan(400)
   })
 
-  it('never stacks two cars a metre apart in the same slot', () => {
-    const [la, lb] = lanesAt([a, b], 50, 7)
-    expect(la).not.toBe(lb)
+  it('spreads lanes from the centre of the track outwards', () => {
+    expect(slotOffsets(1)).toEqual([0])
+    expect(slotOffsets(3)).toEqual([0, 1, -1])
+    expect(slotOffsets(4)).toEqual([-0.5, 0.5, -1.5, 1.5])
+  })
+
+  it('gives every car its own lane for the whole lap when there are enough lanes', () => {
+    for (const t of [0, 10, 50, 99.9, 100.5]) expect(lanesAt([a, b, c], t, 7, 3)).toEqual([0, 1, -1])
+  })
+
+  it('never stacks two cars a metre apart when they have to share lanes', () => {
+    // b would share a's lane but is a metre behind it: it moves to c's lane, c being far down the road
+    expect(lanesAt([a, c, b], 50, 7, 2)).toEqual([-0.5, 0.5, 0.5])
   })
 
   it('zooms on the spread of the pack, within bounds', () => {

@@ -1,11 +1,14 @@
+export const CAR_LENGTH = 5.52
+export const CAR_WIDTH = 2.04
+
 /**
- * Top-down F1 car in metres (5.6 m × 2 m), nose towards +x, centred on the origin.
- * Meant to be placed with `translate(…) rotate(…) scale(px per metre)`.
+ * Top-down F1 car in metres, pointing towards +x with the tip of the nose on the origin: the position of a car
+ * is where its nose is (that is what crosses the line first). Place it with `translate rotate scale(px per m)`.
  */
 export function CarGlyph({ colour, highlight }: { colour: string; highlight?: boolean }) {
   return (
-    <g>
-      {highlight && <ellipse rx={4.4} ry={2.2} fill={colour} opacity={0.22} />}
+    <g transform={`translate(${-CAR_LENGTH / 2} 0)`}>
+      {highlight && <ellipse rx={3.5} ry={1.45} fill={colour} opacity={0.25} />}
       {/* tyres */}
       <g fill="#0b0c0f">
         <rect x={1.35} y={-1.0} width={0.65} height={0.32} rx={0.06} />

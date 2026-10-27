@@ -53,33 +53,48 @@ export function frameAt(cars: GhostCar[], t: number): { frames: CarFrame[]; anch
   return { frames, anchor, reference }
 }
 
-/** Lateral slots: 0 = racing line, ±1 = either side. */
-const LANES = [0, 1, -1]
-
 /**
- * Slot of every car at one instant: by rank, each car takes its preferred slot unless a faster car is
- * less than `minGap` metres away in it, then the free slot (or the least crowded one).
+ * Public position data is snapped onto a reference line of the circuit: it tells how far along the lap a car
+ * is, never whether it is left or right. The lateral layout is therefore ours, built so that no two cars are
+ * ever drawn on top of each other.
+ *
+ * `slots` lanes are spread across the track, numbered from the centre outwards. Car `i` (by rank) owns lane
+ * `i % slots`: with at least as many lanes as cars, every car keeps its own lane for the whole lap.
  */
-function assignLanes(cars: GhostCar[], t: number, minGap: number): number[] {
-  const ds = cars.map((c) => distanceAt(c.ghost, t))
-  const lanes: number[] = []
-  cars.forEach((_, i) => {
-    const pref = LANES[i % LANES.length]
-    const options = [...LANES].sort((a, b) => Math.abs(a - pref) - Math.abs(b - pref))
-    const clearance = (lane: number) => Math.min(Infinity, ...lanes.map((l, j) => (l === lane ? Math.abs(ds[j] - ds[i]) : Infinity)))
-    lanes.push(options.find((l) => clearance(l) >= minGap) ?? options.reduce((a, b) => (clearance(b) > clearance(a) ? b : a)))
-  })
-  return lanes
+export function slotOffsets(slots: number): number[] {
+  // centre first, then alternately left and right: offsets in lane widths, 0 = middle of the track
+  const out: number[] = []
+  for (let i = 0; i < slots; i++) out.push(i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2))
+  // with an even count there is no middle lane: shift everything by half a lane
+  return slots % 2 ? out : out.map((o) => o - 0.5)
 }
 
 /**
- * Lateral position of every car (in slots, fractional while moving across), averaged over the last half
- * second so a car changing slot slides over instead of jumping. Pure: the same `t` always gives the same frame.
+ * Lane of every car at one instant. Each car takes its own lane; only when there are more cars than lanes
+ * can that lane be taken by a faster car less than `minGap` metres away, then the nearest free lane wins
+ * (or the least crowded one).
  */
-export function lanesAt(cars: GhostCar[], t: number, minGap: number): number[] {
+function assignLanes(cars: GhostCar[], t: number, minGap: number, lanes: number[]): number[] {
+  const ds = cars.map((c) => distanceAt(c.ghost, t))
+  const out: number[] = []
+  cars.forEach((_, i) => {
+    const own = lanes[i % lanes.length]
+    const options = [...lanes].sort((a, b) => Math.abs(a - own) - Math.abs(b - own))
+    const clearance = (lane: number) => Math.min(Infinity, ...out.map((l, j) => (l === lane ? Math.abs(ds[j] - ds[i]) : Infinity)))
+    out.push(options.find((l) => clearance(l) >= minGap) ?? options.reduce((a, b) => (clearance(b) > clearance(a) ? b : a)))
+  })
+  return out
+}
+
+/**
+ * Lateral position of every car (in lane widths, fractional while moving across), averaged over the last half
+ * second so a car changing lane slides over instead of jumping. Pure: the same `t` always gives the same frame.
+ */
+export function lanesAt(cars: GhostCar[], t: number, minGap: number, slots: number): number[] {
+  const lanes = slotOffsets(slots)
   const SAMPLES = 9
   const sum = new Array<number>(cars.length).fill(0)
-  for (let s = 0; s < SAMPLES; s++) assignLanes(cars, t - (s * 0.5) / (SAMPLES - 1), minGap).forEach((l, i) => (sum[i] += l))
+  for (let s = 0; s < SAMPLES; s++) assignLanes(cars, t - (s * 0.5) / (SAMPLES - 1), minGap, lanes).forEach((l, i) => (sum[i] += l))
   return sum.map((v) => v / SAMPLES)
 }
 
