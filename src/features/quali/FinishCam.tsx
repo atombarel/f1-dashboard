@@ -19,6 +19,8 @@ const TAG_H = 18
 const HUD_H = 62
 
 const fmtGap = (g: number) => `${g >= 0 ? '+' : '−'}${Math.abs(g).toFixed(3)}`
+/** metres behind the reference; ahead of it gets a minus sign */
+const fmtMetres = (m: number) => `${m < 0 ? '−' : ''}${Math.abs(m).toFixed(1)} m`
 
 /**
  * Top-down camera riding along the track: the leading car on the road sits near the front of the frame
@@ -309,7 +311,7 @@ function Scene({
   )
 }
 
-/** Chip next to a car: name, rank, official gap and metres behind; or just the name when space is short. */
+/** Chip next to a car: name, rank, live gap and metres to the reference; or just the name when space is short. */
 function Label({ frame: f, compact, style }: { frame: CarFrame; compact: boolean; style: CSSProperties }) {
   if (compact)
     return (
@@ -327,8 +329,8 @@ function Label({ frame: f, compact, style }: { frame: CarFrame; compact: boolean
           <span className="tnum text-[9px] text-dim">P{f.car.rank + 1}</span>
         </div>
         <div className="tnum mt-1 flex items-baseline justify-between gap-1 text-[11px]">
-          <span className={f.gap === 0 ? 'text-purple' : 'text-paper'}>{f.gap === 0 ? lapTime(f.car.time) : fmtGap(f.gap)}</span>
-          {f.behind > 0.05 && <span className="whitespace-nowrap text-[9px] text-muted">{f.behind.toFixed(1)} m</span>}
+          <span className={f.gap === 0 ? 'text-purple' : f.live < 0 ? 'text-green' : 'text-paper'}>{f.gap === 0 ? lapTime(f.car.time) : fmtGap(f.live)}</span>
+          {Math.abs(f.behind) >= 0.05 && <span className="whitespace-nowrap text-[9px] text-muted">{fmtMetres(f.behind)}</span>}
         </div>
       </div>
     </div>

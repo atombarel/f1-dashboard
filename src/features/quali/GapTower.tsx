@@ -8,8 +8,9 @@ const ROW_H = 34
 const signed = (v: number, digits = 3) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(digits)}`
 
 /**
- * Order on the road at the current instant, with the official gap and the live delta (time lost to the
- * reference where the car is now). Rows animate as the order changes; hidden cars stay listed, greyed out.
+ * Order on the road at the current instant, with the official gap and the live gap to the reference (which
+ * lands on the official one when the reference takes the flag). Rows animate as the order changes; hidden
+ * cars stay listed, greyed out.
  */
 export function GapTower({
   all,
@@ -70,10 +71,10 @@ export function GapTower({
               <span
                 className={clsx(
                   'tnum text-right text-xs',
-                  !f || f.gap === 0 ? 'text-dim' : f.finished ? 'text-muted' : f.live > 0 ? 'text-signal' : 'text-green',
+                  !f || f.gap === 0 ? 'text-dim' : f.live > 0 ? 'text-signal' : 'text-green',
                 )}
               >
-                {!f || f.gap === 0 ? '—' : f.finished ? '✓' : signed(f.live, 2)}
+                {!f || f.gap === 0 ? '—' : signed(f.live)}
               </span>
               <span className="flex justify-end text-dim group-hover:text-paper">{off ? <EyeOff size={13} /> : <Eye size={13} />}</span>
             </button>

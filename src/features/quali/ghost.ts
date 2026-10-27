@@ -68,15 +68,20 @@ export function speedAt(g: Ghost, t: number): number {
   return t >= g.lapTime ? g.exitSpeed * 3.6 : interp(g.t, g.v, Math.max(0, t))
 }
 
+/** Where the reference is at `t`, capped at the line: live gaps are measured at that point. */
+const referencePoint = (ref: Ghost, t: number) => Math.min(distanceAt(ref, t), ref.length)
+
 /**
- * Time lost to the reference at the point where `g` is at time `t`: how long ago the reference was there.
- * Ends at the lap-time difference once `g` crosses the line.
+ * Live gap to the reference, the way a timing screen measures it: at the point where the reference is (capped
+ * at the line), how much later `g` gets there. Negative when `g` is ahead. From the moment the reference takes
+ * the flag it equals the lap-time difference, so the freeze frame shows the official gaps.
  */
 export function liveGap(ref: Ghost, g: Ghost, t: number): number {
-  return t - timeAt(ref, distanceAt(g, t))
+  const p = referencePoint(ref, t)
+  return timeAt(g, p) - timeAt(ref, p)
 }
 
-/** Metres between the reference and `g` at time `t` (positive: `g` is behind). */
+/** Metres between the reference and `g` at time `t`, both capped at the line (positive: `g` is behind). */
 export function metresBehind(ref: Ghost, g: Ghost, t: number): number {
-  return distanceAt(ref, t) - distanceAt(g, t)
+  return referencePoint(ref, t) - Math.min(distanceAt(g, t), ref.length)
 }

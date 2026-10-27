@@ -33,8 +33,12 @@ describe('ghosts', () => {
   it('measure the gap at the line when the reference finishes', () => {
     // the slower car covers the lap in 101 s at constant speed: 1 s = 1/101 of the lap behind
     expect(metresBehind(ref, slow, 100)).toBeCloseTo(5000 / 101, 3)
-    expect(liveGap(ref, slow, 100)).toBeCloseTo(100 - (100 * 100) / 101, 6)
-    expect(liveGap(ref, slow, 101)).toBeCloseTo(1, 6)
+    // live gap = how much later the slower car reaches the reference's point: half a lap in, half a second
+    expect(liveGap(ref, slow, 50)).toBeCloseTo(0.5, 6)
+    // from the flag on, the live gap is the official one, and the metres shrink to zero at the line
+    expect(liveGap(ref, slow, 100)).toBeCloseTo(1, 6)
+    expect(liveGap(ref, slow, 100.6)).toBeCloseTo(1, 6)
+    expect(metresBehind(ref, slow, 101)).toBeCloseTo(0, 6)
   })
 
   it('keep running past the line at the exit speed', () => {
@@ -58,8 +62,8 @@ describe('Austin 2026 qualifying (ANT vs VER)', () => {
   const p2 = prepareGhost(ver.tel, ver.row.t!, pole.length)
 
   it('puts Verstappen about 0.18 s worth of track behind at the flag', () => {
-    expect(liveGap(pole, p2, pole.lapTime)).toBeGreaterThan(0.15)
-    expect(liveGap(pole, p2, pole.lapTime)).toBeLessThan(0.2)
+    // the freeze frame shows the official gap
+    expect(liveGap(pole, p2, pole.lapTime)).toBeCloseTo(0.179, 6)
     const metres = metresBehind(pole, p2, pole.lapTime)
     // ≈ 0.179 s at ~210 km/h out of the last corner
     expect(metres).toBeGreaterThan(8)
@@ -132,6 +136,7 @@ describe('stage', () => {
     expect(anchor).toBeCloseTo(5000, 3)
     expect(frames.map((f) => f.order)).toEqual([0, 1, 2])
     expect(frames[1].gap).toBeCloseTo(0.02, 6)
+    expect(frames.map((f) => f.live)).toEqual(frames.map((f) => expect.closeTo(f.gap, 6)))
     expect(frames[2].behind).toBeGreaterThan(400)
   })
 

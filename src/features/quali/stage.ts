@@ -1,5 +1,5 @@
 import type { Driver, LapRow } from '@shared/types'
-import { distanceAt, liveGap, type Ghost } from './ghost'
+import { distanceAt, liveGap, metresBehind, type Ghost } from './ghost'
 
 /** A driver's reference lap, ready to race against the others. */
 export interface GhostCar {
@@ -19,9 +19,9 @@ export interface CarFrame {
   d: number
   /** official gap to the reference lap time */
   gap: number
-  /** time lost to the reference at the car's current position */
+  /** live gap to the reference, measured where the reference is (equals `gap` once it has the flag) */
   live: number
-  /** metres behind the leading car on the road (capped at the line) */
+  /** metres behind the reference (negative when ahead), capped at the line */
   behind: number
   finished: boolean
   /** order on the road at this instant */
@@ -43,7 +43,7 @@ export function frameAt(cars: GhostCar[], t: number): { frames: CarFrame[]; anch
     d: ds[i],
     gap: car.time - reference.time,
     live: liveGap(reference.ghost, car.ghost, t),
-    behind: anchor - Math.min(ds[i], length),
+    behind: metresBehind(reference.ghost, car.ghost, t),
     finished: t >= car.ghost.lapTime,
     order: 0,
   }))
