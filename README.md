@@ -7,6 +7,7 @@
 - **Race**: positions lap by lap, the gap to the leader, and overtakes
 - **Strategy**: tyre stints, pit stop times, and tyre degradation
 - **Telemetry**: speed, throttle, brake and gear compared driver against driver, a running delta, and a mini-sector dominance map
+- **Qualifying gaps**: every driver's Q1/Q2/Q3 lap replayed as ghosts, seen from above at their real distance when pole crosses the line
 - **Replay**: the whole race replayed on the track map
 - **Race control**: flags, the safety car, stewards' decisions, and the weather
 

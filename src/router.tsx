@@ -1,11 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent } from '@tanstack/react-router'
 import { Layout } from './components/Layout'
+import type { SegmentId } from './features/quali/segments'
 import { NotFound, RouteError } from './components/ui'
 import { homeQuery, meetingQuery, seasonQuery, sessionMetaQuery, standingsQuery } from './lib/api'
 
-export type SessionTab = 'results' | 'laps' | 'race' | 'strategy' | 'telemetry' | 'replay' | 'control'
-const TABS: SessionTab[] = ['results', 'laps', 'race', 'strategy', 'telemetry', 'replay', 'control']
+export type SessionTab = 'results' | 'laps' | 'race' | 'strategy' | 'telemetry' | 'gaps' | 'replay' | 'control'
+const TABS: SessionTab[] = ['results', 'laps', 'race', 'strategy', 'telemetry', 'gaps', 'replay', 'control']
+const SEGMENTS: SegmentId[] = ['q1', 'q2', 'q3', 'best']
 
 export interface SessionSearch {
   tab?: SessionTab
@@ -13,6 +15,8 @@ export interface SessionSearch {
   d?: string
   /** telemetry laps, "1:12,16:fast" */
   laps?: string
+  /** qualifying gaps segment */
+  seg?: SegmentId
 }
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -54,6 +58,7 @@ export const sessionRoute = createRoute({
     tab: TABS.includes(s.tab as SessionTab) ? (s.tab as SessionTab) : undefined,
     d: typeof s.d === 'string' || typeof s.d === 'number' ? String(s.d) : undefined,
     laps: typeof s.laps === 'string' ? s.laps : undefined,
+    seg: SEGMENTS.includes(s.seg as SegmentId) ? (s.seg as SegmentId) : undefined,
   }),
   loader: ({ context, params }) => void context.queryClient.prefetchQuery(sessionMetaQuery(params.sessionKey)),
   component: lazyRouteComponent(() => import('./routes/session'), 'SessionPage'),
